@@ -108,7 +108,7 @@ impl MarleaEngine {
     }
 
     pub fn run(&self) -> Vec<(String, f64)> {
-        // vector containing all trial results
+        // set containing all trial results
         let mut simulation_results = HashSet::new();
 
         // setup loop variables
