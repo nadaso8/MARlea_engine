@@ -56,7 +56,7 @@ use trial::{
 use self::supported_file_type::TimelineWriter; 
 
 
-mod trial;
+pub mod trial;
 mod supported_file_type; 
 //mod tests;
 
@@ -76,6 +76,26 @@ pub struct MarleaEngine {
 }
 
 impl MarleaEngine {
+    pub fn custom_block ( custom_network: ReactionNetwork ) -> Self {
+
+        let computation_threads = threadpool::Builder::new()
+            .thread_name("compute_thread".into())
+            .build();
+        let computation_threads_channels = sync_channel(0);
+
+        Self { 
+            out_path: None,
+            out_timeline: None, 
+            num_trials: None, 
+            max_runtime: None, 
+            max_semi_stable_steps: None, 
+            computation_threads: computation_threads, 
+            computations_threads_sender: computation_threads_channels.0, 
+            computation_threads_reciever: computation_threads_channels.1, 
+            prime_network: custom_network
+        }
+    }
+
     pub fn new(
         input_path: String,
         init_path: Option<String>,
@@ -85,7 +105,7 @@ impl MarleaEngine {
         max_runtime: Option<u64>,
         max_semi_stable_steps: Option<i32>,
     ) -> Self { 
-        
+
         let reactions = SupportedFileType::from(input_path).parse_reactions();
         let solution = Self::solution_from(init_path, &reactions);
         let prime_network = ReactionNetwork::new(reactions, solution);
@@ -95,15 +115,15 @@ impl MarleaEngine {
         let computation_threads_channels = sync_channel(0);
 
         Self{
-        out_path,
-        out_timeline,
-        num_trials,
-        max_runtime,
-        max_semi_stable_steps,
-        computation_threads,
-        computations_threads_sender: computation_threads_channels.0,
-        computation_threads_reciever: computation_threads_channels.1,
-        prime_network,
+            out_path,
+            out_timeline,
+            num_trials,
+            max_runtime,
+            max_semi_stable_steps,
+            computation_threads,
+            computations_threads_sender: computation_threads_channels.0,
+            computation_threads_reciever: computation_threads_channels.1,
+            prime_network,
         } 
     }
 
@@ -172,7 +192,6 @@ impl MarleaEngine {
         }
 
         drop(timeline_writer_sender);
-
 
         return self.terminate(simulation_results);
 
