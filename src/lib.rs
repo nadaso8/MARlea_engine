@@ -107,7 +107,7 @@ impl MarleaEngine {
         } 
     }
 
-    pub fn run(&self) -> bool {
+    pub fn run(&self) -> Vec<(String, f64)> {
         // vector containing all trial results
         let mut simulation_results = HashSet::new();
 
@@ -172,6 +172,8 @@ impl MarleaEngine {
         }
 
         drop(timeline_writer_sender);
+
+
         return self.terminate(simulation_results);
 
     }
@@ -228,19 +230,21 @@ impl MarleaEngine {
         return Solution{species_counts}; 
     }
 
-    fn terminate(&self, simulation_results: HashSet<Solution>) -> bool {
+    fn terminate(&self, simulation_results: HashSet<Solution>) -> Vec<(String, f64)> {
         
+        let average_stable_solution = Self::average_trials(simulation_results);
+
         //write results if output option ennabled
         if let Some(path) = &self.out_path {
             let output_file = SupportedFileType::from(path.clone());
-            output_file.write_solution(Self::average_trials(simulation_results));
+            output_file.write_solution(average_stable_solution.clone());
         } else {
-            for entry in Self::average_trials(simulation_results) {
+            for entry in average_stable_solution.clone() {
                 println!("{},{}", entry.0 , entry.1);
             }
         }
 
-        return true;
+        return average_stable_solution;
     }
 
     fn engine_runtime_timer(runtime: u64, tx: SyncSender<bool>) {
