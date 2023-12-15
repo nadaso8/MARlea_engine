@@ -1,4 +1,4 @@
-use crate::trial::reaction_network::reaction::{Reaction, term::{Term, solution::Species}};
+use crate::trial::reaction_network::reaction::{Reaction, term::Term};
 use csv::ReaderBuilder;
 use std::sync::mpsc::Receiver;
 use std::path::Path;
@@ -107,7 +107,7 @@ impl SupportedFileType {
     
     /// Parses initial solution from a reaction network based on the file type (CSV, JSON, XML) 
     /// Self: is a parsed set of reactions which will be added to solution with count of 0 if not specieifed in init data
-    pub fn parse_initial_solution(&self, initial_solution: &mut HashMap<Species, Species>) {
+    pub fn parse_initial_solution(&self, initial_solution: &mut HashMap<String, u64>) {
 
         // Match and handle different file types
         match self {
@@ -137,16 +137,16 @@ impl SupportedFileType {
                             }
                         
                             // Ignoring spaces parse first non empty field as Species::name
-                            let mut species_name = Species::Name(String::new());
+                            let mut species_name = String::new();
                             if let Some(name_str) = fields.get(0).map(|s| s.trim()).filter(|s| !s.is_empty()) {
-                                species_name = Species::Name(name_str.to_owned());
+                                species_name = name_str.to_owned();
                             }
                         
                             // Ignoring spaces parse second non empty field as Species::count
-                            let mut species_count = Species::Count(0);
+                            let mut species_count = 0;
                             if let Some(count_str) = fields.get(1).map(|s| s.trim()).filter(|s| !s.is_empty()) {
                                 if let Ok(count_int) = count_str.parse::<u64>() {
-                                    species_count = Species::Count(count_int);
+                                    species_count = count_int;
                                 }
                             }
                         

@@ -30,118 +30,169 @@
 ///     - XML UNIMPLEMENTED! 
 ///     - JSON UNIMPLEMENTED!
 
+
+pub mod trial;
+
 use std::collections::{HashMap, HashSet};
 
 use std::sync::mpsc::{
     sync_channel,
-    SyncSender, Receiver,
+    SyncSender, Receiver
 };
 use std::usize;
-use supported_file_type::SupportedFileType; 
 use threadpool::ThreadPool;
+use trial::TrialReturn;
 use trial::{
     results::TrialResult, 
     reaction_network::{
         ReactionNetwork, 
-        reaction::{
-            Reaction, 
-            term::solution::{
-                Species,
-                Solution,
-            }
-        }
+        reaction::
+            term::solution::Solution
     }
 };
 
-use self::supported_file_type::TimelineWriter; 
-
-
-pub mod trial;
-mod supported_file_type; 
-//mod tests;
-
-pub struct MarleaEngine {
-    // set externally
-    out_path: Option<String>,
-    out_timeline: Option<String>,
-    num_trials: Option<usize>,
-    max_runtime: Option<u64>,
-    max_semi_stable_steps: Option<i32>,
-
-    // constructed by struct
-    computation_threads: ThreadPool,
-    computations_threads_sender: SyncSender<TrialResult>,
-    computation_threads_reciever: Receiver<TrialResult>,
-    prime_network: ReactionNetwork
+/// Marlea Error Types 
+pub enum MarleaError {
+    Unknown(String)
 }
 
-impl MarleaEngine {
-    pub fn custom_block ( custom_network: ReactionNetwork ) -> Self {
+type TrialID = usize;
+type StepCounter = usize;
+/// Marlea Response types  
+#[derive(Clone)]
+pub enum MarleaResponse {
+    IntermediateStep(Solution, TrialID, StepCounter),
+    StableSolution(Solution, TrialID, StepCounter),
+    SimulationResult(Vec<(String, f64)>)
+}
 
+#[derive(Clone)]
+pub enum MarleaReturn {
+    Minimal(SyncSender<MarleaResponse>),
+    Full(SyncSender<MarleaResponse>),
+}
+
+/// This is a builder object containing defaults and methods for constructing a MarleaEngine Object. 
+/// 
+/// # Usage 
+/// ```MarleaEngineBuilder`
+pub struct MarleaEngineBuilder {
+    // set externally
+    num_trials: usize,
+    max_runtime: Option<u64>,
+    max_semi_stable_steps: usize,
+
+    // constructed internally
+    computation_threads: ThreadPool,
+    computation_threads_sender: SyncSender<TrialResult>,
+    computation_threads_reciever: Receiver<TrialResult>,
+    prime_network: ReactionNetwork,
+    runtime_return: MarleaReturn,
+    runtime_reciever: Receiver<MarleaResponse>
+}
+
+impl MarleaEngineBuilder {
+    /// Builds a new MarleaEngine instance from given network with default values 
+    /// 
+    /// trials = 100
+    /// runtime = unlimited 
+    /// semi stable steps = 100
+    /// return verbosity = minimal
+    /// 
+    pub fn new (
+        prime_network: ReactionNetwork
+    ) -> Self {
         let computation_threads = threadpool::Builder::new()
-            .thread_name("compute_thread".into())
+            .thread_name("compute_thread".to_string())
             .build();
-        let computation_threads_channels = sync_channel(0);
+        let (computation_threads_sender, computation_threads_reciever) = sync_channel(32);
+        let (runtime_sender, runtime_reciever) = sync_channel(128);
 
         Self { 
-            out_path: None,
-            out_timeline: None, 
-            num_trials: None, 
+            num_trials: 100, 
             max_runtime: None, 
-            max_semi_stable_steps: None, 
+            max_semi_stable_steps: 99, 
             computation_threads: computation_threads, 
-            computations_threads_sender: computation_threads_channels.0, 
-            computation_threads_reciever: computation_threads_channels.1, 
-            prime_network: custom_network
+            computation_threads_sender, 
+            computation_threads_reciever, 
+            prime_network,
+            runtime_return: MarleaReturn::Minimal(runtime_sender),
+            runtime_reciever,
         }
     }
 
-    pub fn new(
-        input_path: String,
-        init_path: Option<String>,
-        out_path: Option<String>,
-        out_timeline: Option<String>,
-        num_trials: Option<usize>,
-        max_runtime: Option<u64>,
-        max_semi_stable_steps: Option<i32>,
-    ) -> Self { 
-
-        let reactions = SupportedFileType::from(input_path).parse_reactions();
-        let solution = Self::solution_from(init_path, &reactions);
-        let prime_network = ReactionNetwork::new(reactions, solution);
-        let computation_threads = threadpool::Builder::new()
-            .thread_name("compute_thread".into())
-            .build();
-        let computation_threads_channels = sync_channel(0);
-
-        Self{
-            out_path,
-            out_timeline,
-            num_trials,
-            max_runtime,
-            max_semi_stable_steps,
-            computation_threads,
-            computations_threads_sender: computation_threads_channels.0,
-            computation_threads_reciever: computation_threads_channels.1,
-            prime_network,
-        } 
+    /// Sets the number of trials bto be executed to a manual value
+    pub fn trials(mut self, count: usize) -> Self {
+        self.num_trials = count;
+        self
+    }
+    
+    /// Sets the maximum runtime to a manual value
+    pub fn runtime(mut self, time: u64) -> Self {
+        self.max_runtime = Some(time);
+        self
     }
 
-    pub fn run(&self) -> Vec<(String, f64)> {
+    /// Sets the tolerance of stable step states to a manual value
+    /// this should only be used in the case that a CRN is exiting prematurely 
+    pub fn tolerance(mut self, steps: usize) -> Self {
+        self.max_semi_stable_steps = steps;
+        self
+    }
+
+    /// Toggles ReturnVerbosity behavior between minimal and full
+    pub fn verbose(mut self) -> Self {
+        self.runtime_return = match self.runtime_return {
+            MarleaReturn::Minimal(sender) => MarleaReturn::Full(sender),     
+            MarleaReturn::Full(sender) => MarleaReturn::Minimal(sender),     
+        };
+
+        self
+    }
+
+    /// Consumes builder object and outputs a Marlea engine object 
+    pub fn build(self) -> (MarleaEngine, Receiver<MarleaResponse>) {
+
+        let runtime = MarleaEngine {
+            num_trials: self.num_trials,
+            max_runtime:self.max_runtime,
+            max_semi_stable_steps: self.max_semi_stable_steps,
+            computation_threads: self.computation_threads,
+            computation_threads_reciever: self.computation_threads_reciever,
+            computation_threads_sender: self.computation_threads_sender,
+            prime_network: self.prime_network,
+            runtime_return: self.runtime_return
+        };
+
+        return(runtime, self.runtime_reciever)
+    }
+}
+
+/// Main backend runtime object for Marlea
+pub struct MarleaEngine {
+    // set externally
+    num_trials: usize,
+    max_runtime: Option<u64>,
+    max_semi_stable_steps: usize,
+
+    // constructed internally
+    computation_threads: ThreadPool,
+    computation_threads_sender: SyncSender<TrialResult>,
+    computation_threads_reciever: Receiver<TrialResult>,
+    prime_network: ReactionNetwork,
+    runtime_return: MarleaReturn,
+}
+
+impl MarleaEngine {
+    /// Simulates the CRN and returns a sorted list of the average count of each species when a stable state is reached.  
+    pub fn run(&self) -> Result<MarleaResponse, MarleaError>{
+
         // set containing all trial results
         let mut simulation_results = HashSet::new();
 
         // setup loop variables
         let mut trials_recieved = 0;
-        let mut trials_created = 0;
-        let max_trials = match self.num_trials{Some(number) => number, None => 100};        
-
-        // setup timeline writer if one is needed
-        let (timeline_writer_sender, timeline_writer_reciever) = sync_channel(0);
-        if let Some(path) = &self.out_timeline {
-            let timeline_writer = TimelineWriter::new(SupportedFileType::from(path.clone()), timeline_writer_reciever);
-            self.computation_threads.execute(move|| timeline_writer.begin_listen());
-        }
+        let mut trials_created = 0;      
   
         // start runtime timer
         let (timer_sender, timer_reciever) = sync_channel(0);
@@ -149,40 +200,57 @@ impl MarleaEngine {
             self.computation_threads.execute(move|| Self::engine_runtime_timer(time, timer_sender));
         }
 
-        // create trials 
-        match &self.out_timeline {
-            Some(_) => {
-                while trials_created < max_trials {
-                    let mut current_trial = trial::Trial::from(self.prime_network.clone(), self.max_semi_stable_steps, trials_created);
-                    let trial_sender = self.computations_threads_sender.clone();
-                    self.computation_threads.execute(move|| current_trial.simulate_with_timeline(trial_sender));
-                    trials_created += 1;
-                }
-            }
-            None => {
-                while trials_created < max_trials {
-                    let mut current_trial = trial::Trial::from(self.prime_network.clone(), self.max_semi_stable_steps, trials_created);
-                    let trial_sender = self.computations_threads_sender.clone();
-                    self.computation_threads.execute(move || current_trial.simulate(trial_sender));                    
-                    trials_created += 1;
-                }
-            }
+        // setup trial return object
+        let trial_return = match self.runtime_return {
+            MarleaReturn::Minimal(_) => TrialReturn::Minimal(self.computation_threads_sender.clone()),
+            MarleaReturn::Full(_) => TrialReturn::Full(self.computation_threads_sender.clone()),
+        };
+        while trials_created < self.num_trials {
+            let mut current_trial = trial::Trial::from(
+                self.prime_network.clone(), 
+                self.max_semi_stable_steps,
+                trials_created,
+                trial_return.clone()
+            );
+            self.computation_threads.execute(move || current_trial.simulate());                    
+            trials_created += 1;
         }
 
         // poll for trial results
-        while trials_recieved < max_trials {
+        while trials_recieved < self.num_trials {
             if let Ok(result) = self.computation_threads_reciever.try_recv() {
-                match result {
-                    TrialResult::StableSolution(solution, steps) => {
-                        trials_recieved += 1;
-                        println!("Trial stable after {} steps", steps);
-                        println!("Recieved {} trials", trials_recieved);
-                        simulation_results.insert(solution);
-                    }
-                    TrialResult::TimelineEntry(solution, id) => {
-                        timeline_writer_sender.send((solution, id)).unwrap();
-                    }
+                match &self.runtime_return {
+                    MarleaReturn::Minimal(sender) => {
+                        match result {
+                            TrialResult::StableSolution(solution, id, step_counter) => {
+                                trials_recieved += 1;
+                                println!("Trial {} stable after {} steps", id, step_counter);
+                                println!("Recieved {} trials", trials_recieved);
+                                simulation_results.insert(solution.clone());
+                                sender.send(MarleaResponse::StableSolution(solution, id, step_counter))
+                                .expect("Fatal Error: frontend cannot be found by MarleaEngine. Please ensure the receiver is not dropped prematurely");
+                            }
+                            TrialResult::IntermediateStep(_,_,_) => (),
+                        }
+                    },
+                    MarleaReturn::Full(sender) => {
+                        match result {
+                            TrialResult::StableSolution(solution, id, step_counter) => {
+                                trials_recieved += 1;
+                                println!("Trial {} stable after {} steps", id, step_counter);
+                                println!("Recieved {} trials", trials_recieved);
+                                simulation_results.insert(solution.clone());
+                                sender.send(MarleaResponse::StableSolution(solution, id, step_counter))
+                                .expect("Fatal Error: frontend cannot be found by MarleaEngine. Please ensure the receiver is not dropped prematurely");
+                            }
+                            TrialResult::IntermediateStep(solution, id, step_counter) => {
+                                sender.send(MarleaResponse::IntermediateStep(solution, id, step_counter))
+                                .expect("Fatal Error: frontend cannot be found by MarleaEngine. Please ensure the receiver is not dropped prematurely");
+                            },
+                        }
+                    }, 
                 }
+
             }
             
             if let Ok(_) = timer_reciever.try_recv() {
@@ -191,10 +259,16 @@ impl MarleaEngine {
             }
         }
 
-        drop(timeline_writer_sender);
-
-        return self.terminate(simulation_results);
-
+        // attempt to return the final average 
+        let result = MarleaResponse::SimulationResult(self.terminate(simulation_results));
+        match &self.runtime_return {
+            MarleaReturn::Minimal(sender) | MarleaReturn::Full(sender) => {
+                sender.send(result.clone())
+                .expect("Fatal Error: frontend cannot be found by MarleaEngine. Please ensure the receiver is not dropped prematurely")
+            },
+            
+        }
+        return Ok(result);
     }
     
     fn average_trials(simulation_results: HashSet<Solution>) -> Vec<(String, f64)> {
@@ -203,64 +277,28 @@ impl MarleaEngine {
     
         // Sum values of each species across all trials
         for result in &simulation_results {
-            for (name, count) in result.species_counts.clone() {
-                if let Species::Name(species_name) = name {
-                    if let Species::Count(species_count) = count  {
-                        summed_values.entry(species_name)
-                        .and_modify(|summed_count| *summed_count +=  species_count as f64)
-                        .or_insert(species_count as f64);    
-                    }
-                } else {
-                    panic!("Got non-species name when calculating averages");
-                }
+            for (name, count) in &result.species_counts {
+                summed_values.entry(name.clone())
+                .and_modify(|summed_count| *summed_count += *count as f64)
+                .or_insert(*count as f64);    
             }
         }
     
         // Calculate averages and sort alphabetically
-        let mut averaged_values: Vec<(String, f64)> = summed_values
-                        .into_iter()
-                        .map(|(key, value)| (key, value / num_trials))
-                        .collect();
+        let mut averaged_values: Vec<(String, f64)> = summed_values.into_iter()
+            .map(|(key, value)| (key, value / num_trials))
+            .collect();
         averaged_values.sort_by_key(|(species, _)| species.to_owned());
 
         return averaged_values;
-    }
-    
-
-    fn solution_from(file_path: Option<String>, reactions: &HashSet<Reaction>) -> Solution {
-        let mut species_counts: HashMap<Species, Species> = HashMap::new();
-
-        // Get possible species from reactions
-        for reaction in reactions {
-            for reactant in reaction.get_reactants() {
-                // if no such species exists in the map generate a new map entry using the reactant species name and default value 0 
-                species_counts.insert(reactant.get_species_name().clone(), Species::Count(0));
-            }
-            for product in reaction.get_products() {
-                // if no such species exists in the map generate a new map entry using the product species name and default value 0 
-                species_counts.insert(product.get_species_name().clone(), Species::Count(0));
-            }
-        }
-
-        if let Some(path) = file_path {
-            SupportedFileType::from(path).parse_initial_solution(&mut species_counts);
-        }
-
-        return Solution{species_counts}; 
     }
 
     fn terminate(&self, simulation_results: HashSet<Solution>) -> Vec<(String, f64)> {
         
         let average_stable_solution = Self::average_trials(simulation_results);
 
-        //write results if output option ennabled
-        if let Some(path) = &self.out_path {
-            let output_file = SupportedFileType::from(path.clone());
-            output_file.write_solution(average_stable_solution.clone());
-        } else {
-            for entry in average_stable_solution.clone() {
-                println!("{},{}", entry.0 , entry.1);
-            }
+        for (name, avg_count) in average_stable_solution.clone() {
+            println!("{},{}", name , avg_count);
         }
 
         return average_stable_solution;

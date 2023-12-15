@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use rand::Rng;
-use reaction::{Reaction, term::solution::{Species, Solution}};
+use reaction::{Reaction, term::solution::Solution};
 
 pub mod reaction; 
 
@@ -130,19 +130,18 @@ impl ReactionNetwork {
         if !self.possible_reactions.is_empty() {
             if let Some(reaction) = self.get_next_reaction() {
                 for reactant in reaction.get_reactants() {
+                    // original release just used clone on the key instead of dereference here but since it's read only a dereference should be fine?
                     self.solution.species_counts.entry(reactant.get_species_name().clone())
                         .and_modify(|species_count|
-                            if let Species::Count(current_count) =species_count{
-                                *current_count -= reactant.get_coefficient();
-                            });
+                            *species_count -= reactant.get_coefficient()
+                        );
                 }
 
                 for product in reaction.get_products() {
                     self.solution.species_counts.entry(product.get_species_name().clone())
                         .and_modify(|species_count|
-                            if let Species::Count(current_count) = species_count {
-                                *current_count += product.get_coefficient();
-                            });
+                            *species_count += product.get_coefficient()
+                        );
                 }
             } 
             else {

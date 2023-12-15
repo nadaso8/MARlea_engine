@@ -1,5 +1,9 @@
 use std::{collections::HashMap, fmt::Display};
 
+
+//The block commented out below is slated for deprication
+
+/*
 /// Contains a Name, or count for some species
 #[derive(Debug, Hash, Eq, PartialEq, PartialOrd, Ord, Clone)]
 pub enum Species {
@@ -15,10 +19,14 @@ impl Display for Species {
         }
     }
 }
+*/
+
+type Name = String;
+type Count = u64;
 
 #[derive(Eq, PartialEq, Clone)]
 pub struct Solution {
-    pub species_counts: HashMap<Species, Species>,
+    pub species_counts: HashMap<Name, Count>,
 }
 
 impl std::hash::Hash for Solution {
@@ -30,13 +38,13 @@ impl std::hash::Hash for Solution {
 }
 
 impl IntoIterator for Solution {
-    type Item = (Species, Species);
+    type Item = (Name, Count);
     type IntoIter = std::vec::IntoIter<Self::Item>;
 
 
     fn into_iter(self) -> Self::IntoIter {
         // Make an ordered copy of self
-        let mut self_as_vector: Vec<(Species,Species)> = Vec::new();
+        let mut self_as_vector: Vec<(Name, Count)> = Vec::new();
         for entry in self.species_counts {
             self_as_vector.push(entry);
         }
@@ -54,7 +62,7 @@ impl Display for Solution {
         // Format the ordered vector as a string
         let mut formatted_string = String::new();
         for entry in self.clone().into_iter() {
-            formatted_string.push_str(&format!("{},{},",entry.0.to_string(),entry.1.to_string()));
+            formatted_string.push_str(&format!("{},{},", entry.0.to_string(), entry.1.to_string()));
         }
 
         // Write the formatted string to the provided Formatter

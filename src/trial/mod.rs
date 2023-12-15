@@ -13,64 +13,80 @@
 /// You can then run simulations on this Trial instance using the simulate() function.
 /// It returns a HashMap containing all the species keyd by their references in the stable network solution.
 
-use reaction_network::{ReactionNetwork, reaction::term::solution::{Solution}};
+use reaction_network::{ReactionNetwork, reaction::term::solution::Solution};
 use results::TrialResult;
 use std::sync::mpsc::SyncSender;
 
 pub mod reaction_network; 
 pub mod results;
 
+/// Object specifiying return granularity for a trial
+///  - Minimal returns only end stable solutions
+///  - Full returns data for each step  
+#[derive(Clone)]
+pub enum TrialReturn {
+    Minimal(SyncSender<TrialResult>),
+    Full(SyncSender<TrialResult>)
+}
+
 pub struct Trial {
     reaction_network: ReactionNetwork,
     stability: Stability, 
-    max_semi_stable_steps: i32,
+    step_counter: usize,
+    max_semi_stable_steps: usize,
     id: usize,
+    trial_return: TrialReturn
 }
 
 impl <'trial_runtime> Trial {
 
-    pub fn from(reaction_network: ReactionNetwork, max_semi_stable_steps_setting: Option<i32>, id: usize) -> Self {
-        let max_semi_stable_steps: i32; 
-        if let Some(number) = max_semi_stable_steps_setting {
-            max_semi_stable_steps = number;
-        } else {
-            max_semi_stable_steps = 99;
-        }
+    pub fn from(
+        reaction_network: ReactionNetwork,
+        max_semi_stable_steps: usize, 
+        id: usize,
+        trial_return: TrialReturn
+    ) -> Self {
         
         Self {
             reaction_network,
             stability: Stability::Initial,
+            step_counter: 0,
             max_semi_stable_steps,
             id, 
+            trial_return
         }
     }
 
-    pub fn simulate_with_timeline (&mut self, trial_tx: SyncSender<TrialResult>)  {
-        let mut step_count = 0; 
-        loop{
-            step_count += 1; 
-            self.step();
-            trial_tx.send(TrialResult::TimelineEntry(self.reaction_network.get_solution().clone(), self.id))
-                .expect("Reciever thread for trial {} dropped\nShutting down...");
-            if let Stability::Stable = self.stability {
-                trial_tx.send(TrialResult::StableSolution(self.reaction_network.get_solution().clone(), step_count))
-                .expect("Reciever thread for trial {} dropped\nShutting down...");
-                return;
+    pub fn simulate (&mut self)  {
+        match self.trial_return.clone() {
+            
+            // behavior if minimal return behavior selected
+            TrialReturn::Minimal(return_sender) => {
+                loop{
+                    self.step();
+                    if let Stability::Stable = self.stability {
+                        return_sender.send(TrialResult::StableSolution(self.reaction_network.get_solution().clone(), self.id, self.step_counter))
+                        .expect("Reciever thread for trial {} dropped\nShutting down...");
+                        return;
+                    }
+                }
             }
-        }   
-    }
 
-    pub fn simulate(&mut self, trial_tx: SyncSender<TrialResult>) {
-        let mut step_count = 0; 
-        loop{
-            step_count += 1; 
-            self.step();
-            if let Stability::Stable = self.stability {
-                trial_tx.send(TrialResult::StableSolution(self.reaction_network.get_solution().clone(), step_count))
-                .expect("Reciever thread for trial {} dropped\nShutting down...");
-                return;
+            // behavior if full histogram return selected
+            TrialReturn::Full(return_sender) => {
+                loop{
+                    self.step();
+                    return_sender.send(TrialResult::IntermediateStep(self.reaction_network.get_solution().clone(), self.id, self.step_counter))
+                        .expect("Reciever thread for trial {} dropped\nShutting down...");
+                    if let Stability::Stable = self.stability {
+                        return_sender.send(TrialResult::StableSolution(self.reaction_network.get_solution().clone(), self.id, self.step_counter))
+                        .expect("Reciever thread for trial {} dropped\nShutting down...");
+                        return;
+                    }
+                }
             }
-        }   
+        }
+   
     }
 
     fn step(&mut self) {
@@ -133,12 +149,13 @@ impl <'trial_runtime> Trial {
                 self.stability = Stability::Stable;
             }
         }
+        self.step_counter += 1; 
     }
 }
 
 enum Stability {
     Initial, 
     Unstable,
-    SemiStable(i32),
+    SemiStable(usize),
     Stable,
 }

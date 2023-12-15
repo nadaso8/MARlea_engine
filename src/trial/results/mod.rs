@@ -1,8 +1,10 @@
-use super::*;
+use super::Solution;
 
+type ID = usize;
+type StepCounter = usize;
 
 #[derive(Eq, PartialEq, Clone)]
 pub enum TrialResult {
-    StableSolution(Solution, i32), 
-    TimelineEntry(Solution, usize),
+    StableSolution(Solution, ID, StepCounter), 
+    IntermediateStep(Solution, ID, StepCounter),
 }

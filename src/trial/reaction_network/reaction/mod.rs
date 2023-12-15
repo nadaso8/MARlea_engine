@@ -2,7 +2,10 @@ pub mod term;
 
 use std::{collections::{HashSet, HashMap}, hash::{Hash, Hasher}};
 use std::collections::hash_map::DefaultHasher;
-use term::{Term, solution::Species};
+use term::Term;
+
+type Name = String;
+type Count = u64;
 
 /// Stores a set for the reaction reactants and products. 
 /// Eeach element contains the variable key used by a Solution struct as well as a reaction rate. 
@@ -35,11 +38,11 @@ impl Reaction {
         return self.reaction_rate as u128;
     }
 
-    pub fn is_possible (&self, solution: &HashMap<Species,Species>) -> bool {
+    pub fn is_possible (&self, solution: &HashMap<Name, Count>) -> bool {
         let mut reaction_possible = true;
 
         for reactant in &self.reactants {
-            if let Some(Species::Count(current_count)) = solution.get(&reactant.get_species_name()) {
+            if let Some(current_count) = solution.get(reactant.get_species_name()) {
                 if reactant.get_coefficient() > *current_count {
                     reaction_possible = false;
                     break;
