@@ -1,7 +1,9 @@
 use std::collections::HashSet;
 use rand::Rng;
-use reaction::{Reaction, term::solution::Solution};
+use reaction::Reaction;
+use solution::Solution;
 
+pub mod solution;
 pub mod reaction; 
 
 #[derive(Clone)]
@@ -21,8 +23,8 @@ pub mod reaction;
 /// The lifetime parameter `'reaction_network` is used to tie the struct to the lifetime of its dependencies,
 /// such as instances of `Reaction` and `Species`.
 pub struct ReactionNetwork {
-    reactions: HashSet<Reaction>,
-    possible_reactions: HashSet<Reaction>, 
+    reactions: HashSet<Reaction>, 
+    possible_reactions: HashSet<Reaction>,
     null_adjacent_reactions: HashSet<Reaction>,
     solution: Solution,
 }
@@ -35,7 +37,7 @@ impl ReactionNetwork {
         let possible_reactions = HashSet::new();
 
         // Make a new instance of Self with the provided arguments and initialized fields.
-        let mut new_netowrk = Self{reactions, solution, null_adjacent_reactions, possible_reactions};
+        let mut new_netowrk = Self{reactions, solution, possible_reactions, null_adjacent_reactions};
 
         // Generate and cache null adjacent reactions up front
         new_netowrk.gen_null_adjacent_reactions();
@@ -78,44 +80,46 @@ impl ReactionNetwork {
         }
     }
 
-
-    pub fn get_possible_reactions(&self) -> &HashSet<Reaction> {
-        return &self.possible_reactions;
+    pub fn get_possible_reactions (&self) -> &HashSet<Reaction>{
+        &self.possible_reactions
     }
 
-    fn find_possible_reactions<'finding>(&'finding mut self) {
+    /// Re-generates the list of reactions that may happen based on the current state of solution
+    fn find_possible_reactions (&mut self) {
         self.possible_reactions.clear();
-        
+
         // loop over all reactions and check if it's possible for them to occur based on current species concentration
         for reaction in &self.reactions {
-            if reaction.is_possible(&self.solution.species_counts) {
+            if self.solution.validate(reaction) {
                 self.possible_reactions.insert(reaction.clone()); // add reaction to list of possible reactions
             }
         }
     }
 
-    fn sum_reaction_rates (&self) -> u128 {
+    fn sum_possible_reaction_rates (&self) -> u128 {
         let mut sum: u128 = 0; 
         // loop over all possible reactions and sum their reaction rates
-        for reaction in &self.possible_reactions {
-            sum += reaction.get_reaction_rate();
+        for reaction in self.get_possible_reactions() {
+            sum += reaction.get_reaction_rate() as u128;
         }
         return sum;
     }
 
 
     // Get a possible reaction from the set of possible reactions with weighted probability
-    pub fn get_next_reaction<'getting> (&'getting self) -> Option<Reaction> {
-        let mut index = rand::thread_rng().gen_range(0.. self.sum_reaction_rates());
-        let mut next_reaction: Option<Reaction>= None;
+    pub fn get_next_reaction (&mut self) -> Result<Reaction, String> {
+        let mut index = rand::thread_rng().gen_range(0.. self.sum_possible_reaction_rates());
+        let mut next_reaction: Result<Reaction, String> = Result::Err("failed to find next reaction".to_string());
+        
+        self.find_possible_reactions();
 
         // iterate through all possible valid reactions and pick one based on its probability 
         for reaction in self.get_possible_reactions() {
-            if reaction.get_reaction_rate() > index {
-                next_reaction = Some(reaction.clone());
+            if reaction.get_reaction_rate() as u128 > index {
+                next_reaction = Result::Ok(reaction.clone());
                 break;
             } else {
-                index -= reaction.get_reaction_rate();
+                index -= reaction.get_reaction_rate() as u128;
             }
         }
 
@@ -123,34 +127,12 @@ impl ReactionNetwork {
     }
 
     // This function reacts based on the randomly selected Reaction instance
-    pub fn react<'reacting> (&'reacting mut self) {
-        // update the list of possible reactions. 
-        self.find_possible_reactions();
-
-        if !self.possible_reactions.is_empty() {
-            if let Some(reaction) = self.get_next_reaction() {
-                for reactant in reaction.get_reactants() {
-                    // original release just used clone on the key instead of dereference here but since it's read only a dereference should be fine?
-                    self.solution.species_counts.entry(reactant.get_species_name().clone())
-                        .and_modify(|species_count|
-                            *species_count -= reactant.get_coefficient()
-                        );
-                }
-
-                for product in reaction.get_products() {
-                    self.solution.species_counts.entry(product.get_species_name().clone())
-                        .and_modify(|species_count|
-                            *species_count += product.get_coefficient()
-                        );
-                }
-            } 
-            else {
-                panic!("failed to get next reaction in react()");
-            }
-        }
+    pub fn react(&mut self) {
+        let next_reaction = self.get_next_reaction().unwrap();
+        self.solution.apply(next_reaction);
     }
 
-    // returns a reference to the map containing the current state of the reaction network 
+    // returns a reference to a solution 
     pub fn get_solution(&self) -> &Solution {
         return &self.solution;
     }

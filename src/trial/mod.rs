@@ -13,7 +13,7 @@
 /// You can then run simulations on this Trial instance using the simulate() function.
 /// It returns a HashMap containing all the species keyd by their references in the stable network solution.
 
-use reaction_network::{ReactionNetwork, reaction::term::solution::Solution};
+use reaction_network::ReactionNetwork;
 use results::TrialResult;
 use std::sync::mpsc::SyncSender;
 

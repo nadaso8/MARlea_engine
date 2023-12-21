@@ -1,4 +1,4 @@
-use super::Solution;
+use super::reaction_network::solution::Solution;
 
 type ID = usize;
 type StepCounter = usize;

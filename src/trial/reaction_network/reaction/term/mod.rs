@@ -1,6 +1,7 @@
-pub mod solution;
-
-type Name = String;
+use super::super::solution::{
+    Name,
+    Count
+};
 
 /// Contains the data for a single term within a larger reaction.
 /// Species is a reference to a named value in solution which will be added to or subtracted from. 
@@ -8,14 +9,14 @@ type Name = String;
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub struct  Term {
     species_name: Name,
-    coefficient: u8,
+    coefficient: Count,
 }
 
 impl Term {
 
     /// creates a new term from a string slice
     /// returns none if the term sould be null
-    pub fn from(term: &str) -> Option<Self> {
+    /* DEPRICATED pub fn from(term: &str) -> Option<Self> {
         let mut species_name = None;
         let mut coefficient = None;
         let parts: Vec<&str> = term.split(" ").filter(|possible_part| !possible_part.is_empty()).collect();
@@ -52,14 +53,14 @@ impl Term {
                 }
             }
         } else {return None}
-    }
+    }*/
 
-    pub fn new(species_name: Name, coefficient: u8) -> Self {
+    pub fn new(species_name: Name, coefficient: Count) -> Self {
         return Term{species_name , coefficient};
     }
     /// returns the coefficient value of a Term
-    pub fn get_coefficient (&self) -> u64 {
-        return self.coefficient as u64;
+    pub fn get_coefficient (&self) -> &Count {
+        return &self.coefficient;
     }
 
     /// Returns a reference to a Species enum
@@ -67,53 +68,6 @@ impl Term {
     pub fn get_species_name(&self) -> &Name {
         return &self.species_name;
     }
-
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_new() {
-        let term = Term::new(String::from("water"), 2);
-        assert_eq!(term.coefficient, 2);
-        assert_eq!(*term.get_species_name(), String::from("water"));
-    }
-
-    #[test]
-    fn test_get_coefficient() {
-        let term = Term::new(String::from("water"), 3);
-        assert_eq!(term.get_coefficient(), 3);
-    }
-
-    #[test]
-    fn test_get_species_name() {
-        let term = Term::new(String::from("water"), 1);
-        assert_eq!(*term.get_species_name(), String::from("water"));
-    }
-
-#[test]
-fn test_from() {
-    let term_1 = "2 water"; // test behavior with expected name and coefficient
-    let term_2 = " NaOH"; // test behavior with null coeficient
-    let term_3 = "5 O2"; // test behavior when name includes numerals
-    let term_4 = "2water NaCl"; // minorly invalid input 
-    let term_5 = "";// null input
-
-    let expected_1 = Some(Term::new(String::from("water"), 2));
-    let expected_2 = Some(Term::new(String::from("NaOH"), 1)); //default coefficient should be 1 if not specified
-    let expected_3 = Some(Term::new(String::from("O2"), 5));
-    let expected_4 = Some(Term::new(String::from("2water"), 1));
-    let expected_5 = None;
-
-    assert_eq!(Term::from(&term_1), expected_1);
-    assert_eq!(Term::from(&term_2), expected_2);
-    assert_eq!(Term::from(&term_3), expected_3);
-    assert_eq!(Term::from(&term_4), expected_4);
-    assert_eq!(Term::from(&term_5), expected_5);
-
-}
 
 }
 
