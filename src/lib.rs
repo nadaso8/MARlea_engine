@@ -68,8 +68,9 @@ pub enum MarleaResponse {
 // add a none return type for single threaded opperation. 
 #[derive(Clone)]
 pub enum MarleaReturn {
-    Minimal(SyncSender<MarleaResponse>),
     Full(SyncSender<MarleaResponse>),
+    Minimal(SyncSender<MarleaResponse>),
+
 }
 
 /// This is a builder object containing defaults and methods for constructing a MarleaEngine Object. 
@@ -185,7 +186,7 @@ pub struct MarleaEngine {
 
 impl MarleaEngine {
     /// Simulates the CRN and returns a sorted list of the average count of each species when a stable state is reached.  
-    pub fn run(&self) -> Result<MarleaResponse, MarleaError>{
+    pub async fn run(&self) -> Result<MarleaResponse, MarleaError>{
 
         // set containing all trial results
         let mut simulation_results = HashSet::new();
@@ -365,7 +366,7 @@ mod tests {
             ),
             Reaction::new( // csv ln 11
                 vec![Term::new(Name("next_value.less_than.2.index.0".to_string()), Count(2)),],
-                vec![Term::new(Name("next_value.less_than.2.index.0".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.less_than.2.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 12
@@ -390,7 +391,7 @@ mod tests {
             ),
             Reaction::new( // csv ln 16
                 vec![Term::new(Name("setup.call.not.index.0".to_string()), Count(2)),],
-                vec![Term::new(Name("setup.call.not.index.0".to_string()), Count(1)),],
+                vec![Term::new(Name("setup.call.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 17
@@ -420,7 +421,7 @@ mod tests {
             ),
             Reaction::new( // csv ln 23
                 vec![Term::new(Name("current_value.not.index.0".to_string()), Count(2)),],
-                vec![Term::new(Name("current_value.not.index.0".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 24
@@ -450,7 +451,7 @@ mod tests {
             ),
             Reaction::new( // csv ln 29
                 vec![Term::new(Name("last_value.not.index.0".to_string()), Count(2)),],
-                vec![Term::new(Name("last_value.not.index.0".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 30
@@ -475,7 +476,7 @@ mod tests {
             ),
             Reaction::new( // csv ln 35
                 vec![Term::new(Name("destruct.done.partial.0".to_string()), Count(2)),],
-                vec![Term::new(Name("destruct.done.partial.0".to_string()), Count(1)),],
+                vec![Term::new(Name("destruct.done.partial.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 36
@@ -500,7 +501,7 @@ mod tests {
             ),
             Reaction::new( // csv ln 41
                 vec![Term::new(Name("destruct.not.index.0".to_string()), Count(2)),],
-                vec![Term::new(Name("destruct.not.index.0".to_string()), Count(1)),],
+                vec![Term::new(Name("destruct.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 42
@@ -510,307 +511,307 @@ mod tests {
             ),
             Reaction::new( // csv ln 43
                 vec![Term::new(Name("destruct.done".to_string()), Count(1)),],
-                vec![Term::new(Name("destruct.done".to_string()), Count(1)),],
+                vec![Term::new(Name("destruct.done".to_string()), Count(1)), Term::new(Name("destruct.not.index.0".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 44
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("destruct".to_string()), Count(1)),Term::new(Name("destruct.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("destruct".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 45
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("destruct".to_string()), Count(1)), Term::new(Name("destruct.not.index.0".to_string()), Count(1)),],
+                vec![Term::new(Name("destruct".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 46
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("setup.done".to_string()), Count(1)), Term::new(Name("destruct.done".to_string()), Count(1)),],
+                vec![Term::new(Name("setup.done".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 48
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.call".to_string()), Count(2)),],
+                vec![Term::new(Name("calculate.call".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 49
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.call".to_string()), Count(1)), Term::new(Name("calculate.done".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.call".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 50
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.call".to_string()), Count(1)),],
+                vec![Term::new(Name("index.check".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 51
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("index.check".to_string()), Count(1)),Term::new(Name("calculate.call".to_string()), Count(1)),],
+                vec![Term::new(Name("index.check".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 53
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("index.check".to_string()), Count(2)),],
+                vec![Term::new(Name("index.check".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 54
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("index.check".to_string()), Count(1)), Term::new(Name("index".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 55
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.convert".to_string()), Count(1)), Term::new(Name("index.check".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 56
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("index.check".to_string()), Count(1)), Term::new(Name("index.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.return".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 57
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("index.not.index.0".to_string()), Count(2)),],
+                vec![Term::new(Name("index.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 58
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("index.not.index.1".to_string()), Count(2)),],
+                vec![Term::new(Name("index.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 59
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("index.check".to_string()), Count(1)),],
+                vec![Term::new(Name("index.check".to_string()), Count(1)), Term::new(Name("index.not.index.0".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 60
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("index".to_string()), Count(1)), Term::new(Name("index.not.index.0".to_string()), Count(1)),],
+                vec![Term::new(Name("index".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 61
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("index".to_string()), Count(1)), Term::new(Name("index.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("index".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 62
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.return".to_string()), Count(1)), Term::new(Name("index.check".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.return".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 64
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.convert".to_string()), Count(2)),],
+                vec![Term::new(Name("current_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 65
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.convert".to_string()), Count(1)), Term::new(Name("current_value".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value".to_string()), Count(1)), Term::new(Name("current_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 66
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.convert".to_string()), Count(1)), Term::new(Name("current_value.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 67
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.not.index.0".to_string()), Count(2)),],
+                vec![Term::new(Name("current_value.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 68
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.not.index.1".to_string()), Count(2)),],
+                vec![Term::new(Name("current_value.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 69
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.convert".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.convert".to_string()), Count(1)), Term::new(Name("current_value.not.index.0".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 70
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value".to_string()), Count(1)), Term::new(Name("current_value.not.index.0".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 71
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value".to_string()), Count(1)), Term::new(Name("current_value.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 73
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.convert".to_string()), Count(2)),],
+                vec![Term::new(Name("next_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 74
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.convert".to_string()), Count(1)), Term::new(Name("next_value".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.swap".to_string()), Count(1)), Term::new(Name("next_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 75
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.convert".to_string()), Count(1)), Term::new(Name("next_value.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.split".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 76
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.not.index.0".to_string()), Count(2)),],
+                vec![Term::new(Name("next_value.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 77
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.not.index.1".to_string()), Count(2)),],
+                vec![Term::new(Name("next_value.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 78
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.convert".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.not.index.0".to_string()), Count(1)), Term::new(Name("next_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 79
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value".to_string()), Count(1)), Term::new(Name("next_value.not.index.0".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 80
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value".to_string()), Count(1)), Term::new(Name("next_value.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 81
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.split".to_string()), Count(1)), Term::new(Name("next_value.convert".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.split".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 83
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.split".to_string()), Count(2)),],
+                vec![Term::new(Name("next_value.split".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 84
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.split".to_string()), Count(1)), Term::new(Name("next_value.swap".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value".to_string()), Count(1)), Term::new(Name("current_value".to_string()), Count(1)), Term::new(Name("next_value.split".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 85
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.split".to_string()), Count(1)), Term::new(Name("next_value.swap.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 86
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.swap.not.index.0".to_string()), Count(2)),],
+                vec![Term::new(Name("next_value.swap.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 87
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.swap.not.index.1".to_string()), Count(2)),],
+                vec![Term::new(Name("next_value.swap.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 88
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.split".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.swap.not.index.0".to_string()), Count(1)), Term::new(Name("next_value.split".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 89
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.swap".to_string()), Count(1)), Term::new(Name("next_value.swap.not.index.0".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.swap".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 90
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.swap".to_string()), Count(1)), Term::new(Name("next_value.swap.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value.swap".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 91
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value.convert".to_string()), Count(1)), Term::new(Name("next_value.split".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 93
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value.convert".to_string()), Count(2)),],
+                vec![Term::new(Name("last_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 94
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value.convert".to_string()), Count(1)), Term::new(Name("last_value".to_string()), Count(1)),],
+                vec![Term::new(Name("next_value".to_string()), Count(1)), Term::new(Name("last_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 95
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value.convert".to_string()), Count(1)), Term::new(Name("last_value.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("index.check".to_string()), Count(1)), Term::new(Name("last_value.convert".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 96
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value.not.index.0".to_string()), Count(2)),],
+                vec![Term::new(Name("last_value.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 97
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value.not.index.1".to_string()), Count(2)),],
+                vec![Term::new(Name("last_value.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 98
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value.convert".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value.convert".to_string()), Count(1)), Term::new(Name("last_value.not.index.0".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 99
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value".to_string()), Count(1)), Term::new(Name("last_value.not.index.0".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 100
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value".to_string()), Count(1)), Term::new(Name("last_value.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("last_value".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 101
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("index.check".to_string()), Count(1)), Term::new(Name("last_value.convert".to_string()), Count(1)),],
+                vec![Term::new(Name("index.check".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 103
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.return".to_string()), Count(2)),],
+                vec![Term::new(Name("calculate.return".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 104
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.return".to_string()), Count(1)), Term::new(Name("current_value".to_string()), Count(1)),],
+                vec![Term::new(Name("return".to_string()), Count(1)), Term::new(Name("calculate.return".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 105
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.return".to_string()), Count(1)), Term::new(Name("current_value.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.done".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 106
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.not.index.0".to_string()), Count(2)),],
+                vec![Term::new(Name("current_value.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 107
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value.not.index.1".to_string()), Count(2)),],
+                vec![Term::new(Name("current_value.not.index.1".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 108
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.return".to_string()), Count(1)),],
+                vec![Term::new(Name("calculate.return".to_string()), Count(1)), Term::new(Name("current_value.not.index.0".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 109
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value".to_string()), Count(1)), Term::new(Name("current_value.not.index.0".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value".to_string()), Count(1)),],
                 1
             ),
             Reaction::new( // csv ln 110
-                vec![Term::new(Name("".to_string()), Count(1)),],
-                vec![Term::new(Name("".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value".to_string()), Count(1)), Term::new(Name("current_value.not.index.1".to_string()), Count(1)),],
+                vec![Term::new(Name("current_value".to_string()), Count(1)),],
                 1
             ),
         ]);
@@ -818,10 +819,13 @@ mod tests {
         // manually described initial solution 
         let solution = Solution{species_counts: HashMap::from([
             (solution::Name("fibonacci.call".to_string()), Count(1)),
-            (solution::Name("index".to_string()), Count(10) ),
+            (solution::Name("index".to_string()), Count(10)),
         ])} ;
-        let test_instance = Builder::new(ReactionNetwork::new(reactions, solution)
-            
-        );
+        let (test_instance, result_reciever) = Builder::new(ReactionNetwork::new(reactions, solution))
+        .build();
+
+        let result = test_instance.run();
+        // poll  result to completion and throw away all returned solutions
+        
     }
 }
