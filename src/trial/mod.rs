@@ -1,18 +1,3 @@
-/// Author: Marceline Sorensen 
-/// Email: nadaso8th@gmail.com 
-/// Date: 08/03/2023
-/// 
-/// # Description
-/// This code provides a Trial struct and its implementation for simulating a reaction network.
-///  The ReactionNetwork module contains all the necessary details about this network, including species, reactions, and terms.
-/// The simulation process is performed using the Simulate() function in the implementation of Trial. 
-/// It takes a mutable reference to a trial, evaluates its current status, and runs reactions until the network reaches a stable state.
-/// 
-/// # Usage
-/// To use this code, you need to import the ReactionNetwork module and create an instance of ReactionNetwork<'trial>, then create an instance of Trial by passing this instance as an argument.
-/// You can then run simulations on this Trial instance using the simulate() function.
-/// It returns a HashMap containing all the species keyd by their references in the stable network solution.
-
 use reaction_network::ReactionNetwork;
 use results::TrialResult;
 use std::sync::mpsc::SyncSender;
@@ -29,6 +14,8 @@ pub enum TrialReturn {
     Full(SyncSender<TrialResult>)
 }
 
+/// The runtime environment for a single trial. Once the object has been initialized 
+/// the simulate method may be called on it in order to simulate single CRN instance.
 pub struct Trial {
     reaction_network: ReactionNetwork,
     stability: Stability, 
@@ -57,6 +44,7 @@ impl <'trial_runtime> Trial {
         }
     }
 
+    /// Calls the step method and returns the requested data until the reaction network enters the stable state. 
     pub fn simulate (&mut self)  {
         match self.trial_return.clone() {
             
@@ -89,6 +77,7 @@ impl <'trial_runtime> Trial {
    
     }
 
+    /// Simulates a single time step in the trial and updates stability based on the list of possible reactions. 
     fn step(&mut self) {
         match self.stability {
             Stability::Initial => {

@@ -4,9 +4,8 @@ use std::hash::{Hash, Hasher};
 use std::collections::hash_map::DefaultHasher;
 use term::Term;
 
-/// Stores a set for the reaction reactants and products. 
-/// Eeach element contains the variable key used by a Solution struct as well as a reaction rate. 
-/// This struct should only be used inside of the Reaction_Network Struct 
+/// Represents a single reaction, containing a list of reactants and products as well as a reaction rate
+/// in order to scale the probability of that reaction occurring.
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Reaction {
     reactants: Vec<Term>,
@@ -20,17 +19,17 @@ impl Reaction {
         return Self { reactants: reactants, products: products, reaction_rate: reaction_rate};
     }
     
-    /// returns a reference to the reactants set within a reaction
+    /// Returns a reference to the list of reactants for a reaction
     pub fn get_reactants(&self) -> &Vec<Term> {
         return &self.reactants;
     }
 
-    /// returns a reference to the products set within a reaction
+    /// Returns a reference to the list of products for a reaction
     pub fn get_products(&self) -> &Vec<Term> {
         return &self.products;
     }
 
-    /// returns the reaction rate
+    /// Returns the reaction rate for a reaction
     pub fn get_reaction_rate (&self) -> u64 {
         return self.reaction_rate;
     }

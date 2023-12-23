@@ -1,34 +1,14 @@
 /// Author: Marceline Sorensen 
 /// Email: nadaso8th@gmail.com 
-/// Date: 08/03/2023
+/// Date: 12/21/2023
 /// 
 /// # Description
-/// This is the main simulation engine of MARlea it takes a set of reactions as well as a set of initial species valeus. 
-/// It uses these to simulate the average stable case of a chemical reaction network stochastically. 
+/// This module of Marlea contains everything related to simulating the reaction networks. 
+/// It takes a pre-constructed reaction network object from another module such as the MarleaParser.
+/// Once an object is built so long as the .no_response() method wasn't called an async funtion should be setup to handle the returned data befor
+/// .run() is called on the object. 
 /// 
-/// # Arguments (input_path, init_path)
-/// - <input_path>
-///     Specifies an input file location 
-/// - <init_path> 
-///     Specifies a file location to read initial species values from
-///     Is of type Option which may be None
-///     - If none will simply initialize all values to 0
-/// - <out_path>
-///     Specifies an output file location 
-///     Is of type Option which may be None
-/// - <num_trials>
-///     Specifies the number of trials to be used in making a predicted average
-///     Is of type Option which may be None
-///     - if None will defualt to 100 trials to provide a simplistic estimation
-/// - <max_runtime>
-///     Specifies the maximum time the code my run for in seconds
-///     Is of type Option which may be None 
-///     - if None the simulation will run indefinitely
-/// 
-/// Accepted file types: 
-///     - CSV
-///     - XML UNIMPLEMENTED! 
-///     - JSON UNIMPLEMENTED!
+
 
 
 pub mod trial;
@@ -58,16 +38,17 @@ pub enum MarleaError {
 
 type TrialID = usize;
 type StepCounter = usize;
-/// Marlea Response types  
+/// The response types it's possible for marlea to offer up while still simulating
 #[derive(Clone)]
 pub enum MarleaResponse {
     IntermediateStep(Solution, TrialID, StepCounter),
     StableSolution(Solution, TrialID, StepCounter),
 }
 
+/// The final average returned by a Marlea simulation
 pub struct  MarleaResult(Vec<(String, f64)>);
 
-// add a none return type for single threaded opperation. 
+/// The various behaviors marlea may use to return data as well any aditional data or objects they may need
 #[derive(Clone)]
 pub enum MarleaReturn {
     Full(SyncSender<MarleaResponse>),
@@ -78,7 +59,7 @@ pub enum MarleaReturn {
 /// This is a builder object containing defaults and methods for constructing a MarleaEngine Object. 
 /// 
 /// # Usage 
-/// ```MarleaEngineBuilder`
+/// marlea_engine::Builder::new().{option methods}. build 
 pub struct Builder {
     // set externally
     num_trials: usize,
@@ -124,20 +105,20 @@ impl Builder {
         }
     }
 
-    /// Sets the number of trials bto be executed to a manual value
+    /// Sets the number of trials to simulate before taking an average and returning 
     pub fn trials(mut self, count: usize) -> Self {
         self.num_trials = count;
         self
     }
     
-    /// Sets the maximum runtime to a manual value
+    /// Sets the maximum runtime to simulate for before forcing the simulation to quit
     pub fn runtime(mut self, time: u64) -> Self {
         self.max_runtime = Some(time);
         self
     }
 
     /// Sets the tolerance of stable step states to a manual value
-    /// this should only be used in the case that a CRN is exiting prematurely 
+    /// this should only be used in the case that a CRN is exiting prematurely and likely could be avoided with better network design
     pub fn tolerance(mut self, steps: usize) -> Self {
         self.max_semi_stable_steps = steps;
         self
@@ -154,6 +135,7 @@ impl Builder {
         self
     }
 
+    /// Sets Marlea to not offer any data back apart from the return from the .run() method 
     pub fn no_response(mut self) -> Self {
         self.runtime_return = MarleaReturn::None();
 
@@ -283,6 +265,7 @@ impl MarleaEngine {
         return Ok(result);
     }
     
+    /// Averages the counts from a collection of solutions and returns them as a sorted list of name average value pairs 
     fn average_trials(simulation_results: HashSet<Solution>) -> Vec<(String, f64)> {
         let mut summed_values = HashMap::<String, f64>::new();
         let num_trials = simulation_results.len() as f64;
@@ -305,6 +288,7 @@ impl MarleaEngine {
         return averaged_values;
     }
 
+    /// Cleanup runtime and print data
     fn terminate(&self, simulation_results: HashSet<Solution>) -> Vec<(String, f64)> {
         
         let average_stable_solution = Self::average_trials(simulation_results);

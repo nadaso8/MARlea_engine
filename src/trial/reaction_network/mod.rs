@@ -6,22 +6,15 @@ use solution::Solution;
 pub mod solution;
 pub mod reaction; 
 
+/// Data structure representing a DNA chemical reaction network. 
+/// - reactions 
+///     - the set of reactions in the network
+/// - possible reactions
+///     - the set of reactions which may happen next
+/// - null_adjacent reactions 
+///     - the set of reactions which will always happen or contain the products of reactions which always happen.
+///       if the possible reactions is a subset of this it indicates the reaction network may have stalled out to a stable state
 #[derive(Clone)]
-/// A `ReactionNetwork` represents a computational netowork of chemical reactions.
-///
-/// It contains four main components:
-///
-/// - `reactions`: a set of all the reactions in the network, represented as instances of `Reaction`.
-/// - `possible_reactions`: a subset of `reactions` that are currently possible to occur based on the current state
-///                        of the system (i.e. the concentration of Species in solution). This is updated at each time step.
-/// - `null_adjacent_reactions`: a subset of `reactions` that involve only products, 
-///                              or involve reactants produced by `reactions` only involving products.
-///                              i.e. they are adjacent to null species.
-///                              This is used to speed up computations.
-/// - `solution`: a dictionary that maps Species::Names to their Species::counts
-///
-/// The lifetime parameter `'reaction_network` is used to tie the struct to the lifetime of its dependencies,
-/// such as instances of `Reaction` and `Species`.
 pub struct ReactionNetwork {
     reactions: HashSet<Reaction>, 
     possible_reactions: HashSet<Reaction>,
@@ -46,12 +39,12 @@ impl ReactionNetwork {
         return new_netowrk;
     }
 
+    /// Returns a reference to the set of null adjacent reactions
     pub fn get_null_adjacent_reactions(&self) -> &HashSet<Reaction> {
-        // Returns a reference to the null_adjacent_reactions HashSet
         return &self.null_adjacent_reactions;
     }
 
-    // Clears the null_adjacent_reactions HashSet and generates a new set.
+    /// Determines and caches the set of null adjacent reactions
     fn gen_null_adjacent_reactions(&mut self) {
 
         self.null_adjacent_reactions.clear();
@@ -81,11 +74,12 @@ impl ReactionNetwork {
         }
     }
 
+    /// Returns the cached set of possible reactions
     pub fn get_possible_reactions (&self) -> &HashSet<Reaction>{
         &self.possible_reactions
     }
 
-    /// Re-generates the list of reactions that may happen based on the current state of solution
+    /// Re-generates the list of possible reactions
     fn find_possible_reactions (&mut self) {
         self.possible_reactions.clear();
 
@@ -97,6 +91,7 @@ impl ReactionNetwork {
         }
     }
 
+    /// Takes the sum of the all the reaction rates currently possible_reactions 
     fn sum_possible_reaction_rates (&self) -> u128 {
         let mut sum: u128 = 0; 
         // loop over all possible reactions and sum their reaction rates
@@ -107,8 +102,8 @@ impl ReactionNetwork {
     }
 
 
-    // Get a possible reaction from the set of possible reactions with weighted probability
-    pub fn get_next_reaction (&self) -> Result<Reaction, String> {
+    /// Randomly selects a reaction from possible_reactions to happen next weighted by the reaction rate of each reaction
+    fn get_next_reaction (&self) -> Result<Reaction, String> {
 
         let mut index = rand::thread_rng().gen_range(0.. self.sum_possible_reaction_rates());
         let mut next_reaction: Result<Reaction, String> = Result::Err("failed to find next reaction".to_string());
@@ -126,13 +121,13 @@ impl ReactionNetwork {
         return next_reaction;
     }
 
-    // This function reacts based on the randomly selected Reaction instance
+    /// Selects a reaction to happen next, applies it to the solution, and re-generates the set of possible reactions so it remains up to date. 
     pub fn react(&mut self) {
         self.solution.apply(self.get_next_reaction().unwrap());
         self.find_possible_reactions();// update list of possible reactions after solution has changed
     }
 
-    // returns a reference to a solution 
+    // Returns a reference to the current solution
     pub fn get_solution(&self) -> &Solution {
         return &self.solution;
     }

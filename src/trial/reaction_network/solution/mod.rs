@@ -1,25 +1,26 @@
 use std::{collections::HashMap, fmt::Display};
-
 use super::reaction::Reaction;
 
+/// Tuple struct wrapper around name data for a species of DNA
 #[derive(PartialEq, Eq, PartialOrd, Ord,  Hash, Clone, Debug)]
 pub struct Name(pub String);
+
+/// Tuple struct wrapper around count data for a species of DNA
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct Count(pub u64);
 
+/// A collection of species name and counts which may be mutated over time by having Reaction objects applied to it via the .apply method 
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub struct Solution {
     pub species_counts: HashMap<Name, Count>,
 }
 
 impl Solution {
-    /// updates the counts in solution assuming the selected reaction was to happen
+    /// Mutates the solution to reflect the effects of a reaction
     pub fn apply (&mut self, reaction: Reaction) {
         for reactant in reaction.get_reactants() {
             self.species_counts.entry(reactant.get_species_name().clone())
                 .and_modify(|species_count|
-                    // if Counts aren't being updated it's likely that the internal u64 from the original count reference is being copied
-                    // and not actually having it's value reassigned. 
                     species_count.0 -= reactant.get_coefficient().0
                 );
         }
@@ -32,7 +33,10 @@ impl Solution {
         }
     }
 
-    /// checks a reaction against the current state of solution and returns if it would be possible for the reaction to happen
+    /// Validates a reaction by checking it's reactants against the current solution 
+    /// 
+    /// #### Note!
+    /// This function may default to true if only some of the reactants are in the current solution
     pub fn validate (&self, reaction: &Reaction) -> bool {
         let mut reaction_possible = true;
 
