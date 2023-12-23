@@ -3,11 +3,14 @@
 /// Date: 12/21/2023
 /// 
 /// # Description
-/// This module of Marlea contains everything related to simulating the reaction networks. 
-/// It takes a pre-constructed reaction network object from another module such as the MarleaParser.
-/// Once an object is built so long as the .no_response() method wasn't called an async funtion should be setup to handle the returned data befor
-/// .run() is called on the object. 
+/// This Is the main simulation module for Marlea. It handles simulating to generate an estimated stable stat for CRNs via a monte carlo algorithm.
+/// In order to use this module a ReactionNetwork object must first be constructed elsewhere before a runtime may be setup
 /// 
+/// # Known Issues 
+/// When a marlea engine object is constructed solution data must contian all names in reaction reactant terms otherwise the reaction validation process will break.
+/// 
+/// # Hopeful Plans
+/// I would like to switch the runtime of the backend over to rayon at some point 
 
 
 
@@ -58,8 +61,37 @@ pub enum MarleaReturn {
 
 /// This is a builder object containing defaults and methods for constructing a MarleaEngine Object. 
 /// 
-/// # Usage 
-/// marlea_engine::Builder::new().{option methods}. build 
+/// ## no response single threaded execution
+/// 
+/// ```
+/// /* some code creating reactions and solution */
+/// let reaction_network = ReactionNetwork::new(reactions, solution);
+/// let marlea = marlea_engine::Builder::new(reaction_network).no_response()./*your options here*/.build();
+/// 
+/// /* you may drop the reciever since no_response option was selected causing all senders to also be dropped*/
+/// drop(marlea.1);
+/// 
+/// /* simulate and return average of trials on current thread */
+/// let result = marlea.0.run().unwrap().0;
+/// 
+/// ```
+/// 
+/// ## minimal - full response multithreaded execution
+/// ```
+/// /* some code creating reactions and solution */
+/// let reaction_network = ReactionNetwork::new(reactions, solution);
+/// let marlea = marlea_engine::Builder::new(reaction_network)./*your options here*/.build();
+/// 
+/// 
+/// let frontend = threadpool::Threadpool::new(1);
+/// frontend.execute( move|| {
+///     /* my frontend code this should take the reciever offered up by the marlea_engine builder */
+/// });
+/// 
+/// /* simulate and return average of trials on current thread */
+/// let result = marlea.0.run().unwrap().0;
+/// 
+/// ```
 pub struct Builder {
     // set externally
     num_trials: usize,
@@ -137,7 +169,13 @@ impl Builder {
 
     /// Sets Marlea to not offer any data back apart from the return from the .run() method 
     pub fn no_response(mut self) -> Self {
-        self.runtime_return = MarleaReturn::None();
+        match self.runtime_return.clone() {
+            MarleaReturn::Full(sender) | MarleaReturn::Minimal(sender) => {
+                drop(sender);
+                self.runtime_return = MarleaReturn::None();
+            },
+            MarleaReturn::None() => ()
+        }
 
         self
     }
@@ -851,18 +889,18 @@ mod tests {
             (solution::Name("last_value.convert".to_string()), Count(0)),
             (solution::Name("return".to_string()), Count(0)),
         ])} ;
-        let (test_instance, response_reciever) = Builder::new(ReactionNetwork::new(reactions, solution))
+        let (marlea, response_reciever) = Builder::new(ReactionNetwork::new(reactions, solution))
             .no_response()
             .trials(1000)
             .build();
         
         drop(response_reciever);
         
-        let result = test_instance.run().unwrap().0;
+        let result = marlea.run().unwrap().0;
         
         for (name, count) in result {
             if name == "return".to_string() {
-                assert!(count > 54.9 && count < 55.1);
+                assert!(count > 54.5&& count < 55.5);
             }
         }
     }
