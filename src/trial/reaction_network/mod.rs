@@ -39,8 +39,9 @@ impl ReactionNetwork {
         // Make a new instance of Self with the provided arguments and initialized fields.
         let mut new_netowrk = Self{reactions, solution, possible_reactions, null_adjacent_reactions};
 
-        // Generate and cache null adjacent reactions up front
+        // Generate and cache null adjacent and possible reactions up front so they are always available
         new_netowrk.gen_null_adjacent_reactions();
+        new_netowrk.find_possible_reactions();
 
         return new_netowrk;
     }
@@ -62,13 +63,13 @@ impl ReactionNetwork {
                 // Insert the reaction into the null_adjacent_reactions HashSet and access its corresponding product(s)
                 if self.null_adjacent_reactions.insert(reaction.clone()) {
                     for product in reaction.get_products() {
-                        let null_generated_species = product.get_species_name();
+                        let null_generated_species = product.get_species_name().0.clone();
 
                         // For each secondary reaction, check if its reactant species matches the current null generated species
                         for secondary_reaction in &self.reactions {
                             for secondary_reactant in secondary_reaction.get_reactants() {
 
-                                if null_generated_species == secondary_reactant.get_species_name() {
+                                if null_generated_species == secondary_reactant.get_species_name().0.clone() {
                                     // Insert the reaction into the null_adjacent_reactions HashSet.
                                     self.null_adjacent_reactions.insert(secondary_reaction.clone());
                                 }
@@ -107,11 +108,10 @@ impl ReactionNetwork {
 
 
     // Get a possible reaction from the set of possible reactions with weighted probability
-    pub fn get_next_reaction (&mut self) -> Result<Reaction, String> {
+    pub fn get_next_reaction (&self) -> Result<Reaction, String> {
+
         let mut index = rand::thread_rng().gen_range(0.. self.sum_possible_reaction_rates());
         let mut next_reaction: Result<Reaction, String> = Result::Err("failed to find next reaction".to_string());
-        
-        self.find_possible_reactions();
 
         // iterate through all possible valid reactions and pick one based on its probability 
         for reaction in self.get_possible_reactions() {
@@ -128,8 +128,8 @@ impl ReactionNetwork {
 
     // This function reacts based on the randomly selected Reaction instance
     pub fn react(&mut self) {
-        let next_reaction = self.get_next_reaction().unwrap();
-        self.solution.apply(next_reaction);
+        self.solution.apply(self.get_next_reaction().unwrap());
+        self.find_possible_reactions();// update list of possible reactions after solution has changed
     }
 
     // returns a reference to a solution 
