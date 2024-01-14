@@ -49,7 +49,7 @@ pub enum MarleaResponse {
 }
 
 /// The final average returned by a Marlea simulation
-pub struct  MarleaResult(Vec<(String, f64)>);
+pub struct  MarleaResult(pub Vec<(String, f64)>);
 
 /// The various behaviors marlea may use to return data as well any aditional data or objects they may need
 #[derive(Clone)]
@@ -888,7 +888,7 @@ mod tests {
             (solution::Name("next_value.swap.not.index.0".to_string()), Count(0)),
             (solution::Name("last_value.convert".to_string()), Count(0)),
             (solution::Name("return".to_string()), Count(0)),
-        ])} ;
+        ])};
         let (marlea, response_reciever) = Builder::new(ReactionNetwork::new(reactions, solution))
             .no_response()
             .trials(1000)
