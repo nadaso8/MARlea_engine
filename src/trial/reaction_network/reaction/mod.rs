@@ -6,7 +6,7 @@ use term::Term;
 
 /// Represents a single reaction, containing a list of reactants and products as well as a reaction rate
 /// in order to scale the probability of that reaction occurring.
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Ord, PartialOrd)]
 pub struct Reaction {
     reactants: Vec<Term>,
     products: Vec<Term>,

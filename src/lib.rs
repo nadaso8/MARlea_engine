@@ -23,7 +23,7 @@ use std::sync::mpsc::{
     SyncSender, Receiver
 };
 use std::usize;
-use threadpool::ThreadPool;
+use rayon;
 use trial::TrialReturn;
 use trial::{
     results::TrialResult, 
@@ -222,7 +222,6 @@ impl MarleaEngine {
 
         // setup loop variables
         let mut trials_recieved = 0;
-        let mut trials_created = 0;      
   
         // start runtime timer
         let (timer_sender, timer_reciever) = sync_channel(0);
@@ -236,7 +235,7 @@ impl MarleaEngine {
             MarleaReturn::Full(_) => TrialReturn::Full(self.computation_threads_sender.clone()),
             MarleaReturn::None() => TrialReturn::Minimal(self.computation_threads_sender.clone())
         };
-        while trials_created < self.num_trials {
+        for trials_created in 0 .. self.num_trials {
             let mut current_trial = trial::Trial::from(
                 self.prime_network.clone(), 
                 self.max_semi_stable_steps,
@@ -244,7 +243,6 @@ impl MarleaEngine {
                 trial_return.clone()
             );
             self.computation_threads.execute(move || current_trial.simulate());                    
-            trials_created += 1;
         }
 
         // poll for trial results

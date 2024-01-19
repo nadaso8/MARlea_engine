@@ -1,7 +1,7 @@
 use super::super::solution::{Name, Count};
 
 /// Contains The data for a single term within a reaction. 
-#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Ord, PartialOrd)]
 pub struct  Term {
     species_name: Name,
     coefficient: Count,
