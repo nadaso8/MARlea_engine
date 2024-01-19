@@ -1,5 +1,5 @@
 use std::collections::{HashSet, BTreeSet};
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{Rng, rngs::StdRng, SeedableRng};
 use reaction::Reaction;
 use solution::Solution;
 
@@ -18,18 +18,18 @@ pub mod reaction;
 pub struct ReactionNetwork {
     reactions: HashSet<Reaction>, 
     possible_reactions: BTreeSet<Reaction>,
-    null_adjacent_reactions: HashSet<Reaction>,
+    null_adjacent_reactions: BTreeSet<Reaction>,
     solution: Solution,
-    prng: StdRng,
+    prng: Option<StdRng>
 }
 
 impl ReactionNetwork {
 
     pub fn new(reactions: HashSet<Reaction>, solution: Solution) -> Self {
         // Initialize null_adjacent_reactions and possible_reactions as empty HashSet
-        let null_adjacent_reactions = HashSet::new();
+        let null_adjacent_reactions = BTreeSet::new();
         let possible_reactions = BTreeSet::new();
-        let prng = StdRng::fr(rand::rnrandom());
+        let prng = None; // zero effort seeding up front (the seed will be provided at trial initialization)
 
         // Make a new instance of Self with the provided arguments and initialized fields.
         let mut new_netowrk = 
@@ -48,8 +48,15 @@ impl ReactionNetwork {
         return new_netowrk;
     }
 
+
+    /// sets prng to some prng based on seed
+    pub fn with_seed(mut self, seed: [u8; 32]) -> Self {
+        self.prng = Some(StdRng::from_seed(seed));
+        self
+    }
+
     /// Returns a reference to the set of null adjacent reactions
-    pub fn get_null_adjacent_reactions(&self) -> &HashSet<Reaction> {
+    pub fn get_null_adjacent_reactions(&self) -> &BTreeSet<Reaction> {
         return &self.null_adjacent_reactions;
     }
 
@@ -114,7 +121,7 @@ impl ReactionNetwork {
     /// Randomly selects a reaction from possible_reactions to happen next weighted by the reaction rate of each reaction
     fn get_next_reaction (&self) -> Result<Reaction, String> {
 
-        let mut index = rand::rngs::StdRng::from_seed(self.seed).gen_range(0.. self.sum_possible_reaction_rates());
+        let mut index = self.prng.expect("No Prng initialized").gen_range(0.. self.sum_possible_reaction_rates());
         let mut next_reaction: Result<Reaction, String> = Result::Err("failed to find next reaction".to_string());
 
         // iterate through all possible valid reactions and pick one based on its probability 

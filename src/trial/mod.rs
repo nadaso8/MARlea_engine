@@ -87,7 +87,7 @@ impl <'trial_runtime> Trial {
                     self.stability = Stability::Stable;
                 }
 
-                else if self.reaction_network.get_possible_reactions().is_subset(&self.reaction_network.get_null_adjacent_reactions()) {
+                else if self.reaction_network.get_possible_reactions().is_subset(self.reaction_network.get_null_adjacent_reactions()) {
                     self.stability = Stability::SemiStable(0);
                 } 
                 

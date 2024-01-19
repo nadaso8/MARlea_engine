@@ -22,7 +22,7 @@ use std::sync::mpsc::{
     sync_channel,
     SyncSender, Receiver
 };
-use std::usize;
+use std::{usize, thread};
 use rayon;
 use trial::TrialReturn;
 use trial::{
@@ -99,9 +99,6 @@ pub struct Builder {
     max_semi_stable_steps: usize,
 
     // constructed internally
-    computation_threads: ThreadPool,
-    computation_threads_sender: SyncSender<TrialResult>,
-    computation_threads_reciever: Receiver<TrialResult>,
     prime_network: ReactionNetwork,
     runtime_return: MarleaReturn,
     runtime_reciever: Receiver<MarleaResponse>
@@ -118,19 +115,12 @@ impl Builder {
     pub fn new (
         prime_network: ReactionNetwork
     ) -> Self {
-        let computation_threads = threadpool::Builder::new()
-            .thread_name("MarleaComputeThread".to_string())
-            .build();
-        let (computation_threads_sender, computation_threads_reciever) = sync_channel(32);
         let (runtime_sender, runtime_reciever) = sync_channel(128);
 
         Self { 
             num_trials: 100, 
             max_runtime: None, 
             max_semi_stable_steps: 99, 
-            computation_threads: computation_threads, 
-            computation_threads_sender, 
-            computation_threads_reciever, 
             prime_network,
             runtime_return: MarleaReturn::Minimal(runtime_sender),
             runtime_reciever,
@@ -187,9 +177,6 @@ impl Builder {
             num_trials: self.num_trials,
             max_runtime:self.max_runtime,
             max_semi_stable_steps: self.max_semi_stable_steps,
-            computation_threads: self.computation_threads,
-            computation_threads_reciever: self.computation_threads_reciever,
-            computation_threads_sender: self.computation_threads_sender,
             prime_network: self.prime_network,
             runtime_return: self.runtime_return
         };
@@ -206,9 +193,6 @@ pub struct MarleaEngine {
     max_semi_stable_steps: usize,
 
     // constructed internally
-    computation_threads: ThreadPool,
-    computation_threads_sender: SyncSender<TrialResult>,
-    computation_threads_reciever: Receiver<TrialResult>,
     prime_network: ReactionNetwork,
     runtime_return: MarleaReturn,
 }
@@ -224,10 +208,6 @@ impl MarleaEngine {
         let mut trials_recieved = 0;
   
         // start runtime timer
-        let (timer_sender, timer_reciever) = sync_channel(0);
-        if let Some(time) = self.max_runtime {
-            self.computation_threads.execute(move|| Self::engine_runtime_timer(time, timer_sender));
-        }
 
         // setup trial return object
         let trial_return = match self.runtime_return {
