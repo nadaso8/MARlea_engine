@@ -23,10 +23,11 @@ use std::sync::mpsc::{
     SyncSender, Receiver
 };
 use std::{usize, thread};
-use rayon;
-use trial::TrialReturn;
+use rayon::iter::ParallelIterator;
+use rayon::{self, iter};
+use trial::reaction_network::solution::{Name, Count, self};
 use trial::{
-    results::TrialResult, 
+    TrialState,
     reaction_network::{
         ReactionNetwork, 
         solution::Solution
@@ -39,23 +40,14 @@ pub enum MarleaError {
     Unknown(String)
 }
 
-type TrialID = usize;
-type StepCounter = usize;
-/// The response types it's possible for marlea to offer up while still simulating
-#[derive(Clone)]
-pub enum MarleaResponse {
-    IntermediateStep(Solution, TrialID, StepCounter),
-    StableSolution(Solution, TrialID, StepCounter),
-}
-
 /// The final average returned by a Marlea simulation
 pub struct  MarleaResult(pub Vec<(String, f64)>);
 
 /// The various behaviors marlea may use to return data as well any aditional data or objects they may need
 #[derive(Clone)]
 pub enum MarleaReturn {
-    Full(SyncSender<MarleaResponse>),
-    Minimal(SyncSender<MarleaResponse>),
+    Full(SyncSender<MarleaResult>),
+    Minimal(SyncSender<MarleaResult>),
     None()
 }
 
@@ -101,7 +93,8 @@ pub struct Builder {
     // constructed internally
     prime_network: ReactionNetwork,
     runtime_return: MarleaReturn,
-    runtime_reciever: Receiver<MarleaResponse>
+    runtime_reciever: Receiver<MarleaResult>,
+    trial_states: Vec<TrialState>,
 }
 
 impl Builder {
@@ -116,6 +109,7 @@ impl Builder {
         prime_network: ReactionNetwork
     ) -> Self {
         let (runtime_sender, runtime_reciever) = sync_channel(128);
+        let trial_states = Vec::new();
 
         Self { 
             num_trials: 100, 
@@ -124,6 +118,7 @@ impl Builder {
             prime_network,
             runtime_return: MarleaReturn::Minimal(runtime_sender),
             runtime_reciever,
+            trial_states,
         }
     }
 
@@ -171,14 +166,15 @@ impl Builder {
     }
 
     /// Consumes builder object and outputs a Marlea engine object 
-    pub fn build(self) -> (MarleaEngine, Receiver<MarleaResponse>) {
+    pub fn build(self) -> (MarleaEngine, Receiver<MarleaResult>) {
 
         let runtime = MarleaEngine {
             num_trials: self.num_trials,
             max_runtime:self.max_runtime,
             max_semi_stable_steps: self.max_semi_stable_steps,
             prime_network: self.prime_network,
-            runtime_return: self.runtime_return
+            runtime_return: self.runtime_return,
+            trial_states: self.trial_states
         };
 
         return(runtime, self.runtime_reciever)
@@ -195,119 +191,40 @@ pub struct MarleaEngine {
     // constructed internally
     prime_network: ReactionNetwork,
     runtime_return: MarleaReturn,
+    trial_states: Vec<TrialState>,
 }
 
 impl MarleaEngine {
     /// Simulates the CRN and returns a sorted list of the average count of each species when a stable state is reached.  
     pub fn run(self) -> Result<MarleaResult, MarleaError>{
 
-        // set containing all trial results
-        let mut simulation_results = HashSet::new();
-
         // setup loop variables
         let mut trials_recieved = 0;
   
         // start runtime timer
 
-        // setup trial return object
-        let trial_return = match self.runtime_return {
-            MarleaReturn::Minimal(_) => TrialReturn::Minimal(self.computation_threads_sender.clone()),
-            MarleaReturn::Full(_) => TrialReturn::Full(self.computation_threads_sender.clone()),
-            MarleaReturn::None() => TrialReturn::Minimal(self.computation_threads_sender.clone())
-        };
-        for trials_created in 0 .. self.num_trials {
-            let mut current_trial = trial::Trial::from(
-                self.prime_network.clone(), 
-                self.max_semi_stable_steps,
-                trials_created,
-                trial_return.clone()
-            );
-            self.computation_threads.execute(move || current_trial.simulate());                    
-        }
+        // setup trials 
 
-        // poll for trial results
-        while trials_recieved < self.num_trials {
-            if let Ok(result) = self.computation_threads_reciever.try_recv() {
-                match &self.runtime_return {
-                    MarleaReturn::Minimal(sender) => {
-                        match result {
-                            TrialResult::StableSolution(solution, id, step_counter) => {
-                                trials_recieved += 1;
-                                println!("Trial {} stable after {} steps", id, step_counter);
-                                println!("Recieved {} trials", trials_recieved);
-                                simulation_results.insert(solution.clone());
-                                sender.send(MarleaResponse::StableSolution(solution, id, step_counter)).unwrap();
-                            }
-                            TrialResult::IntermediateStep(_,_,_) => (),
-                        }
-                    },
-                    MarleaReturn::Full(sender) => {
-                        match result {
-                            TrialResult::StableSolution(solution, id, step_counter) => {
-                                trials_recieved += 1;
-                                println!("Trial {} stable after {} steps", id, step_counter);
-                                println!("Recieved {} trials", trials_recieved);
-                                simulation_results.insert(solution.clone());
-                                sender.send(MarleaResponse::StableSolution(solution, id, step_counter)).unwrap();
-                            }
-                            TrialResult::IntermediateStep(solution, id, step_counter) => {
-                                sender.send(MarleaResponse::IntermediateStep(solution, id, step_counter)).unwrap();
-                            },
-                        }
-                    },
-                    MarleaReturn::None() => {
-                        match result {
-                            TrialResult::StableSolution(solution, id, step_counter) => {
-                                trials_recieved += 1;
-                                println!("Trial {} stable after {} steps", id, step_counter);
-                                println!("Recieved {} trials", trials_recieved);
-                                simulation_results.insert(solution.clone());
-                            }
-                            TrialResult::IntermediateStep(_,_,_) => (),
-                        }
-                    },
-                }
+        // step trials to completion with paralelliterator and monitor communication from frontend
 
-            }
-            
-            if let Ok(_) = timer_reciever.try_recv() {
-                println!("forced termination because max time was reached\n\nWARNING: returned results may not be accurate and should be used for debugging purposes only");
-                break;
-            }
-        }
+
 
         // attempt to return the final average 
-        let result = MarleaResult(self.terminate(simulation_results));
+        let result = MarleaResult(self.terminate());
         return Ok(result);
     }
     
     /// Averages the counts from a collection of solutions and returns them as a sorted list of name average value pairs 
-    fn average_trials(simulation_results: HashSet<Solution>) -> Vec<(String, f64)> {
-        let mut summed_values = HashMap::<String, f64>::new();
-        let num_trials = simulation_results.len() as f64;
-    
-        // Sum values of each species across all trials
-        for result in &simulation_results {
-            for (name, count) in result.clone() {
-                summed_values.entry(name.0)
-                .and_modify(|summed_count| *summed_count += count.0 as f64)
-                .or_insert(count.0 as f64);    
-            }
-        }
-    
-        // Calculate averages and sort alphabetically
-        let mut averaged_values: Vec<(String, f64)> = summed_values.into_iter()
-            .map(|(key, value)| (key, value / num_trials))
-            .collect();
-        averaged_values.sort_by_key(|(species, _)| species.to_owned());
-
-        return averaged_values;
+    fn average_trials(sim_states: &Vec<Solution>) -> Vec<(String, f64)> {
+        use rayon::iter::IntoParallelRefIterator;
+        let summed_values = sim_states.par_iter().fold(||);
     }
 
+
     /// Cleanup runtime and print data
-    fn terminate(&self, simulation_results: HashSet<Solution>) -> Vec<(String, f64)> {
+    fn terminate(self) -> Vec<(String, f64)> {
         
-        let average_stable_solution = Self::average_trials(simulation_results);
+        let average_stable_solution = Self::average_trials(self.trial_states);
 
         for (name, avg_count) in average_stable_solution.clone() {
             println!("{},{}", name , avg_count);

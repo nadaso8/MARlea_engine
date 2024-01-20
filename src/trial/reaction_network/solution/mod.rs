@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, ops::Add};
 use super::reaction::Reaction;
 
 /// Tuple struct wrapper around name data for a species of DNA
@@ -76,6 +76,15 @@ impl IntoIterator for Solution {
         return self_as_vector.into_iter();
     }
     
+}
+
+impl Add for Solution {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        use rayon::iter::IntoParallelIterator;
+        
+    }
 }
 
 

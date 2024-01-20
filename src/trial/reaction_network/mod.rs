@@ -20,7 +20,8 @@ pub struct ReactionNetwork {
     possible_reactions: BTreeSet<Reaction>,
     null_adjacent_reactions: BTreeSet<Reaction>,
     solution: Solution,
-    prng: Option<StdRng>
+    prng: Option<StdRng>,
+    seed: Option<[u8; 32]>,
 }
 
 impl ReactionNetwork {
@@ -29,7 +30,8 @@ impl ReactionNetwork {
         // Initialize null_adjacent_reactions and possible_reactions as empty HashSet
         let null_adjacent_reactions = BTreeSet::new();
         let possible_reactions = BTreeSet::new();
-        let prng = None; // zero effort seeding up front (the seed will be provided at trial initialization)
+        let prng = None;
+        let seed = None;
 
         // Make a new instance of Self with the provided arguments and initialized fields.
         let mut new_netowrk = 
@@ -39,6 +41,7 @@ impl ReactionNetwork {
             possible_reactions, 
             null_adjacent_reactions,
             prng,
+            seed,
         };
 
         // Generate and cache null adjacent and possible reactions up front so they are always available
@@ -51,9 +54,13 @@ impl ReactionNetwork {
 
     /// sets prng to some prng based on seed
     pub fn with_seed(mut self, seed: [u8; 32]) -> Self {
+        self.seed = Some(seed);
         self.prng = Some(StdRng::from_seed(seed));
         self
     }
+
+    /// returns a reference to the current seed value
+    pub fn get_seed(&self) -> &Option<[u8; 32]> {&self.seed}
 
     /// Returns a reference to the set of null adjacent reactions
     pub fn get_null_adjacent_reactions(&self) -> &BTreeSet<Reaction> {

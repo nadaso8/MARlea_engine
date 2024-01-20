@@ -1,28 +1,25 @@
 use reaction_network::ReactionNetwork;
-use results::TrialResult;
-use std::sync::mpsc::SyncSender;
+use self::reaction_network::solution::Solution;
 
 pub mod reaction_network; 
-pub mod results;
 
-/// Object specifiying return granularity for a trial
-///  - Minimal returns only end stable solutions
-///  - Full returns data for each step  
-#[derive(Clone)]
-pub enum TrialReturn {
-    Minimal(SyncSender<TrialResult>),
-    Full(SyncSender<TrialResult>)
-}
+#[derive(Debug, Clone, Copy)]
+pub struct Step(usize);
+#[derive(Debug, Clone, Copy)]
+pub struct ID(usize);
 
+pub enum TrialState {
+    Processing(ID, Step, Solution),
+    Complete(ID, Step, Solution),
+} 
 /// The runtime environment for a single trial. Once the object has been initialized 
-/// the simulate method may be called on it in order to simulate single CRN instance.
+/// the step method must be called on it repeadedly until it reaches a stable state. 
 pub struct Trial {
     reaction_network: ReactionNetwork,
     stability: Stability, 
-    step_counter: usize,
+    step_counter: Step,
     max_semi_stable_steps: usize,
-    id: usize,
-    trial_return: TrialReturn
+    trial_id: ID,
 }
 
 impl <'trial_runtime> Trial {
@@ -30,55 +27,20 @@ impl <'trial_runtime> Trial {
     pub fn from(
         reaction_network: ReactionNetwork,
         max_semi_stable_steps: usize, 
-        id: usize,
-        trial_return: TrialReturn
+        trial_id: usize,
     ) -> Self {
         
         Self {
             reaction_network,
             stability: Stability::Initial,
-            step_counter: 0,
+            step_counter: Step(0),
             max_semi_stable_steps,
-            id, 
-            trial_return
+            trial_id: ID(trial_id), 
         }
-    }
-
-    /// Calls the step method and returns the requested data until the reaction network enters the stable state. 
-    pub fn simulate (&mut self)  {
-        match self.trial_return.clone() {
-            
-            // behavior if minimal return behavior selected
-            TrialReturn::Minimal(return_sender) => {
-                loop{
-                    self.step();
-                    if let Stability::Stable = self.stability {
-                        return_sender.send(TrialResult::StableSolution(self.reaction_network.get_solution().clone(), self.id, self.step_counter))
-                        .expect("Reciever thread for trial {} dropped\nShutting down...");
-                        return;
-                    }
-                }
-            }
-
-            // behavior if full histogram return selected
-            TrialReturn::Full(return_sender) => {
-                loop{
-                    self.step();
-                    return_sender.send(TrialResult::IntermediateStep(self.reaction_network.get_solution().clone(), self.id, self.step_counter))
-                        .expect("Reciever thread for trial {} dropped\nShutting down...");
-                    if let Stability::Stable = self.stability {
-                        return_sender.send(TrialResult::StableSolution(self.reaction_network.get_solution().clone(), self.id, self.step_counter))
-                        .expect("Reciever thread for trial {} dropped\nShutting down...");
-                        return;
-                    }
-                }
-            }
-        }
-   
     }
 
     /// Simulates a single time step in the trial and updates stability based on the list of possible reactions. 
-    fn step(&mut self) {
+    pub fn step(&mut self) -> TrialState {
         match self.stability {
             Stability::Initial => {
                 self.reaction_network.react();
@@ -87,7 +49,7 @@ impl <'trial_runtime> Trial {
                     self.stability = Stability::Stable;
                 }
 
-                else if self.reaction_network.get_possible_reactions().is_subset(self.reaction_network.get_null_adjacent_reactions()) {
+                else if self.reaction_network.get_possible_reactions().is_subset(&self.reaction_network.get_null_adjacent_reactions()) {
                     self.stability = Stability::SemiStable(0);
                 } 
                 
@@ -135,10 +97,11 @@ impl <'trial_runtime> Trial {
             }
 
             Stability::Stable => {
-                self.stability = Stability::Stable;
+                return TrialState::Complete(self.trial_id, self.step_counter, self.reaction_network.get_solution().clone());
             }
         }
-        self.step_counter += 1; 
+        self.step_counter.0 += 1; 
+        return TrialState ::Processing(self.trial_id, self.step_counter, self.reaction_network.get_solution().clone())
     }
 }
 
