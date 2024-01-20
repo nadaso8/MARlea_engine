@@ -214,16 +214,41 @@ impl MarleaEngine {
         return Ok(result);
     }
     
-    /// Averages the counts from a collection of solutions and returns them as a sorted list of name average value pairs 
-    fn average_trials(sim_states: &Vec<Solution>) -> Vec<(String, f64)> {
-        use rayon::iter::IntoParallelRefIterator;
-        let summed_values = sim_states.par_iter().fold(||);
+    /// Averages the counts from a collection of solutions and returns them as a sorted list of name average value pairs
+    fn average_trials(sim_states: &Vec<Solution>) -> Vec<(Name, f64)> {
+        use rayon::{
+            iter::IntoParallelIterator,
+            prelude::ParallelSliceMut,
+        };
+
+        // sum all indecies in paralell 
+        let sum = sim_states
+            .into_par_iter()
+            .reduce(
+                ||&Solution{species_counts: HashMap::new()},
+                |a, b| 
+                &(*a + *b)
+            );
+        
+        //divide all counts by no trials and cast to floats
+        let avg = sum.species_counts
+            .into_par_iter()
+            .map(
+                |(name , count)|
+                (name, ((count.0 as f64)/(sim_states.len() as f64)))
+            );
+
+        // collect to vec and sort by name
+        let mut list:Vec<_> = avg.collect();
+        list.par_sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+        return list;
     }
 
 
     /// Cleanup runtime and print data
     fn terminate(self) -> Vec<(String, f64)> {
-        
+        todo!("update to work with new paralell avg fn")
         let average_stable_solution = Self::average_trials(self.trial_states);
 
         for (name, avg_count) in average_stable_solution.clone() {

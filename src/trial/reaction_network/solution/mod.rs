@@ -1,4 +1,6 @@
 use std::{collections::HashMap, fmt::Display, ops::Add};
+use rayon::iter::ParallelIterator;
+
 use super::reaction::Reaction;
 
 /// Tuple struct wrapper around name data for a species of DNA
@@ -63,17 +65,10 @@ impl std::hash::Hash for Solution {
 
 impl IntoIterator for Solution {
     type Item = (Name, Count);
-    type IntoIter = std::vec::IntoIter<Self::Item>;
+    type IntoIter = std::collections::hash_map::IntoIter<Name, Count>;
 
     fn into_iter(self) -> Self::IntoIter {
-        // Make an ordered copy of self
-        let mut self_as_vector: Vec<(Name, Count)> = Vec::new();
-        for entry in self.species_counts {
-            self_as_vector.push(entry);
-        }
-        self_as_vector.sort();
-
-        return self_as_vector.into_iter();
+        self.species_counts.into_iter()
     }
     
 }
@@ -81,12 +76,22 @@ impl IntoIterator for Solution {
 impl Add for Solution {
     type Output = Self;
 
+    /// preforms summation between Solutions in paralell by getting an entry from 
     fn add(self, rhs: Self) -> Self::Output {
         use rayon::iter::IntoParallelIterator;
-        
+        return Self{
+            species_counts:
+            self.species_counts
+            .into_par_iter()
+            .map(
+                |(name, count)| 
+                // calculates an entry< Name, Count > pair with a new count == count A + count B assuming count B is 0 if an entry for name DNE 
+                ( name, Count( count.0 + rhs.species_counts.get( &name ).get_or_insert( &Count(0) ).0 ) ) 
+            )
+            .collect()
+        }
     }
 }
-
 
 impl Display for Solution {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
