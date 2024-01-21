@@ -16,15 +16,17 @@
 
 pub mod trial;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap};
 
 use std::sync::mpsc::{
     sync_channel,
-    SyncSender, Receiver
+    SyncSender, Receiver, Sender
 };
-use std::{usize, thread};
-use rayon::iter::ParallelIterator;
-use rayon::{self, iter};
+
+use std::usize;
+use rayon::iter::{ParallelIterator, IntoParallelRefMutIterator};
+use rayon::result;
+use trial::Trial;
 use trial::reaction_network::solution::{Name, Count, self};
 use trial::{
     TrialState,
@@ -37,11 +39,19 @@ use trial::{
 /// Marlea Error Types 
 #[derive(Debug)]
 pub enum MarleaError {
-    Unknown(String)
+    Unknown(String),
+    Exceeded_runtime(&'static str)
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct  Avg(f64);
+
 /// The final average returned by a Marlea simulation
-pub struct  MarleaResult(pub Vec<(String, f64)>);
+#[derive(Debug, Clone)]
+pub enum MarleaResult {
+    Intermediary(Vec<(Name, Avg)>),// indicates that there is more data to come 
+    Final(Vec<(Name, Avg)>),// indicates that no more data will be sent
+}
 
 /// The various behaviors marlea may use to return data as well any aditional data or objects they may need
 #[derive(Clone)]
@@ -87,14 +97,13 @@ pub enum MarleaReturn {
 pub struct Builder {
     // set externally
     num_trials: usize,
-    max_runtime: Option<u64>,
+    max_runtime: Option<std::time::Duration>,
     max_semi_stable_steps: usize,
 
     // constructed internally
     prime_network: ReactionNetwork,
     runtime_return: MarleaReturn,
     runtime_reciever: Receiver<MarleaResult>,
-    trial_states: Vec<TrialState>,
 }
 
 impl Builder {
@@ -109,7 +118,6 @@ impl Builder {
         prime_network: ReactionNetwork
     ) -> Self {
         let (runtime_sender, runtime_reciever) = sync_channel(128);
-        let trial_states = Vec::new();
 
         Self { 
             num_trials: 100, 
@@ -118,7 +126,6 @@ impl Builder {
             prime_network,
             runtime_return: MarleaReturn::Minimal(runtime_sender),
             runtime_reciever,
-            trial_states,
         }
     }
 
@@ -130,7 +137,7 @@ impl Builder {
     
     /// Sets the maximum runtime to simulate for before forcing the simulation to quit
     pub fn runtime(mut self, time: u64) -> Self {
-        self.max_runtime = Some(time);
+        self.max_runtime = Some(std::time::Duration::from_secs(time));
         self
     }
 
@@ -174,7 +181,7 @@ impl Builder {
             max_semi_stable_steps: self.max_semi_stable_steps,
             prime_network: self.prime_network,
             runtime_return: self.runtime_return,
-            trial_states: self.trial_states
+            step_counter: 0,
         };
 
         return(runtime, self.runtime_reciever)
@@ -185,49 +192,147 @@ impl Builder {
 pub struct MarleaEngine {
     // set externally
     num_trials: usize,
-    max_runtime: Option<u64>,
+    max_runtime: Option<std::time::Duration>,
     max_semi_stable_steps: usize,
 
     // constructed internally
     prime_network: ReactionNetwork,
     runtime_return: MarleaReturn,
-    trial_states: Vec<TrialState>,
+    step_counter: u64
 }
 
 impl MarleaEngine {
     /// Simulates the CRN and returns a sorted list of the average count of each species when a stable state is reached.  
-    pub fn run(self) -> Result<MarleaResult, MarleaError>{
+    pub fn run(mut self) -> Result<MarleaResult, MarleaError>{
+        let result = Result::Err(MarleaError::Unknown("err\n\n huh?".to_string()));
 
-        // setup loop variables
-        let mut trials_recieved = 0;
-  
-        // start runtime timer
+        // create an instant in the future when which we should close the program 
+        let timer = match self.max_runtime {
+            Some(time) => Some(std::time::Instant::now() + time),
+            None => None
+        };
 
-        // setup trials 
+        // setup trials object
+        let mut processing_trials: HashMap<trial::ID, Trial> = HashMap::new();
+        processing_trials.reserve(self.num_trials);
+        let mut completed_trials: HashMap<trial::ID, Trial> = HashMap::new();
+        completed_trials.reserve(self.num_trials);
+        for index in 0..self.num_trials{
+            processing_trials.insert(
+                trial::ID(index),
+                Trial::from(
+                    self.prime_network.clone().with_seed(rand::random()), 
+                    self.max_semi_stable_steps,
+                    index
+                )
+            );
+        }
 
         // step trials to completion with paralelliterator and monitor communication from frontend
+        use rayon::iter::IntoParallelIterator;
+        while completed_trials.len() < self.num_trials {
+            // step simulation forward in paralell
+            let step_results: Vec<TrialState> = processing_trials
+            .par_iter_mut()
+            .map(
+                |trial|
+                trial.1.step()
+            ).collect();
+            self.step_counter += 1;
+            
+
+            // check return behavior 
+            match self.runtime_return {
+                // calc and send average for each step
+                MarleaReturn::Full(ref tx) => {
+
+                    // build itterator over solutions and update map of which trials are still in progress
+                    let mut sln_iter =  Vec::new();
+                    for state in step_results {
+                        sln_iter.push(
+                            match state {
+                                TrialState::Processing(id, sln) => sln,
+                                TrialState::Complete(id, sln) => {
+                                    let trial = processing_trials.get(&id).unwrap();
+                                    completed_trials.insert(id, trial.clone());
+                                    processing_trials.remove(&id);
+                                    sln
+                                }
+                            }
+                        )
+                    }
+
+                    //calc avg
+                    let sln_avg = Self::average_trials(sln_iter);
+                    tx.send(MarleaResult::Intermediary(sln_avg)).expect("Frontend dropped reciever?")
+                },
+                // move any completed trials
+                MarleaReturn::Minimal(_) => {
+                    for state in step_results {
+                        match state {
+                            TrialState::Processing(_, _) => (),
+                            TrialState::Complete(id, _) => {
+                                let trial = processing_trials.get(&id).unwrap();
+                                completed_trials.insert(id, trial.clone());
+                                processing_trials.remove(&id);
+                            }
+                        }
+                    }
+                },
+                // move any completed trials
+                MarleaReturn::None() => {
+                    for state in step_results {
+                        match state {
+                            TrialState::Processing(_, _) => (),
+                            TrialState::Complete(id, _) => {
+                                let trial = processing_trials.get(&id).unwrap();
+                                completed_trials.insert(id, trial.clone());
+                                processing_trials.remove(&id);
+                            }
+                        }
+                    }
+                },
+            }
+
+            // force quit when max runtime exceeded
+            if let Some(time) = timer {
+                if time > std::time::Instant::now() {
+                    return Result::Err(MarleaError::Exceeded_runtime(&"Max runtime reached Force quitting"));
+                }
+            }
+        }
 
 
+        todo!("AHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
+        for state in completed_trials.values() {
+            state.get_solution()
+        }
 
-        // attempt to return the final average 
-        let result = MarleaResult(self.terminate());
-        return Ok(result);
+        
+        match self.runtime_return {
+            // send final avg 
+            MarleaReturn::Full(ref tx) => ,
+            MarleaReturn::Minimal(ref tx) => ,
+            MarleaReturn::None() => ,
+            
+        }
     }
     
     /// Averages the counts from a collection of solutions and returns them as a sorted list of name average value pairs
-    fn average_trials(sim_states: &Vec<Solution>) -> Vec<(Name, f64)> {
+    fn average_trials(sim_states: Vec<Solution>) -> Vec<(Name, Avg)> {
         use rayon::{
             iter::IntoParallelIterator,
             prelude::ParallelSliceMut,
         };
+        let no_states = sim_states.len();
 
         // sum all indecies in paralell 
         let sum = sim_states
             .into_par_iter()
             .reduce(
-                ||&Solution{species_counts: HashMap::new()},
+                ||Solution{species_counts: HashMap::new()},
                 |a, b| 
-                &(*a + *b)
+                (a + b)
             );
         
         //divide all counts by no trials and cast to floats
@@ -235,7 +340,7 @@ impl MarleaEngine {
             .into_par_iter()
             .map(
                 |(name , count)|
-                (name, ((count.0 as f64)/(sim_states.len() as f64)))
+                (name, Avg((count.0 as f64)/(no_states as f64)))
             );
 
         // collect to vec and sort by name
@@ -244,27 +349,6 @@ impl MarleaEngine {
 
         return list;
     }
-
-
-    /// Cleanup runtime and print data
-    fn terminate(self) -> Vec<(String, f64)> {
-        todo!("update to work with new paralell avg fn")
-        let average_stable_solution = Self::average_trials(self.trial_states);
-
-        for (name, avg_count) in average_stable_solution.clone() {
-            println!("{},{}", name , avg_count);
-        }
-
-        return average_stable_solution;
-    }
-
-    fn engine_runtime_timer(runtime: u64, tx: SyncSender<bool>) {
-        let max_runtime = std::time::Duration::from_secs(runtime);
-        std::thread::sleep(max_runtime);
-        tx.send(true).unwrap();
-        return;
-    } 
-
 }
 
 #[cfg(test)]
@@ -276,7 +360,7 @@ mod tests {
     fn sim_fibonacci_10 () {
 
         // manually described reaction network yes I know this is disgusting to look at but this should be able to run tests without influence from parser code
-        let reactions = HashSet::from([
+        let reactions = std::collections::HashSet::from([
             Reaction::new( // csv ln 1
                 vec![Term::new(Name("fibonacci.call".to_string()), Count(1)),],
                 vec![Term::new(Name("setup.call".to_string()), Count(1)),],

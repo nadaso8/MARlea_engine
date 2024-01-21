@@ -1,23 +1,25 @@
+use std::clone;
+
 use reaction_network::ReactionNetwork;
 use self::reaction_network::solution::Solution;
 
 pub mod reaction_network; 
 
 #[derive(Debug, Clone, Copy)]
-pub struct Step(usize);
-#[derive(Debug, Clone, Copy)]
-pub struct ID(usize);
+pub struct Step(pub usize);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ID(pub usize);
 
 pub enum TrialState {
-    Processing(ID, Step, Solution),
-    Complete(ID, Step, Solution),
+    Processing(ID, Solution),
+    Complete(ID, Solution),
 } 
 /// The runtime environment for a single trial. Once the object has been initialized 
 /// the step method must be called on it repeadedly until it reaches a stable state. 
+#[derive(Clone)]
 pub struct Trial {
     reaction_network: ReactionNetwork,
     stability: Stability, 
-    step_counter: Step,
     max_semi_stable_steps: usize,
     trial_id: ID,
 }
@@ -33,7 +35,6 @@ impl <'trial_runtime> Trial {
         Self {
             reaction_network,
             stability: Stability::Initial,
-            step_counter: Step(0),
             max_semi_stable_steps,
             trial_id: ID(trial_id), 
         }
@@ -97,14 +98,22 @@ impl <'trial_runtime> Trial {
             }
 
             Stability::Stable => {
-                return TrialState::Complete(self.trial_id, self.step_counter, self.reaction_network.get_solution().clone());
+                return TrialState::Complete(self.trial_id, self.reaction_network.get_solution().clone());
             }
         }
-        self.step_counter.0 += 1; 
-        return TrialState ::Processing(self.trial_id, self.step_counter, self.reaction_network.get_solution().clone())
+        return TrialState ::Processing(self.trial_id, self.reaction_network.get_solution().clone())
+    }
+
+    pub fn get_solution(&self) -> &Solution {
+        self.reaction_network.get_solution()
+    }
+
+    pub fn get_seed(&self) -> [u8; 32] {
+        self.reaction_network.get_seed().unwrap()
     }
 }
 
+#[derive(Clone, Copy)]
 enum Stability {
     Initial, 
     Unstable,

@@ -86,7 +86,7 @@ impl Add for Solution {
             .map(
                 |(name, count)| 
                 // calculates an entry< Name, Count > pair with a new count == count A + count B assuming count B is 0 if an entry for name DNE 
-                ( name, Count( count.0 + rhs.species_counts.get( &name ).get_or_insert( &Count(0) ).0 ) ) 
+                ( name.clone(), Count( count.0 + rhs.species_counts.get( &name ).get_or_insert( &Count(0) ).0 ) ) 
             )
             .collect()
         }
