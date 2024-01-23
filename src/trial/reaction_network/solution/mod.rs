@@ -78,18 +78,14 @@ impl Add for Solution {
 
     /// preforms summation between Solutions in paralell by getting an entry from 
     fn add(self, rhs: Self) -> Self::Output {
-        use rayon::iter::IntoParallelIterator;
-        return Self{
-            species_counts:
-            self.species_counts
-            .into_par_iter()
-            .map(
-                |(name, count)| 
-                // calculates an entry< Name, Count > pair with a new count == count A + count B assuming count B is 0 if an entry for name DNE 
-                ( name.clone(), Count( count.0 + rhs.species_counts.get( &name ).get_or_insert( &Count(0) ).0 ) ) 
-            )
-            .collect()
+        use rayon::iter::IntoParallelIterator; 
+        let mut sum = self.clone();
+        for rhs_entry in rhs {
+            sum.species_counts.entry(rhs_entry.0)
+            .and_modify(|lhs_count| lhs_count.0 += rhs_entry.1.0 )
+            .or_insert(rhs_entry.1);
         }
+        return sum;
     }
 }
 

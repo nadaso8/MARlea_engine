@@ -20,8 +20,8 @@ pub struct ReactionNetwork {
     possible_reactions: BTreeSet<Reaction>,
     null_adjacent_reactions: BTreeSet<Reaction>,
     solution: Solution,
-    prng: Option<StdRng>,
-    seed: Option<[u8; 32]>,
+    prng: StdRng,
+    seed: [u8; 32],
 }
 
 impl ReactionNetwork {
@@ -30,8 +30,8 @@ impl ReactionNetwork {
         // Initialize null_adjacent_reactions and possible_reactions as empty HashSet
         let null_adjacent_reactions = BTreeSet::new();
         let possible_reactions = BTreeSet::new();
-        let prng = None;
-        let seed = None;
+        let seed: [u8; 32] = rand::random();
+        let prng = rand::rngs::StdRng::from_seed(seed);
 
         // Make a new instance of Self with the provided arguments and initialized fields.
         let mut new_netowrk = 
@@ -54,13 +54,13 @@ impl ReactionNetwork {
 
     /// sets prng to some prng based on seed
     pub fn with_seed(mut self, seed: [u8; 32]) -> Self {
-        self.seed = Some(seed);
-        self.prng = Some(StdRng::from_seed(seed));
+        self.seed = seed;
+        self.prng = StdRng::from_seed(seed);
         self
     }
 
     /// returns a reference to the current seed value
-    pub fn get_seed(&self) -> &Option<[u8; 32]> {&self.seed}
+    pub fn get_seed(&self) -> &[u8; 32] {&self.seed}
 
     /// Returns a reference to the set of null adjacent reactions
     pub fn get_null_adjacent_reactions(&self) -> &BTreeSet<Reaction> {
@@ -126,9 +126,10 @@ impl ReactionNetwork {
 
 
     /// Randomly selects a reaction from possible_reactions to happen next weighted by the reaction rate of each reaction
-    fn get_next_reaction (&self) -> Result<Reaction, String> {
+    fn get_next_reaction (&mut self) -> Result<Reaction, String> {
 
-        let mut index = self.prng.expect("No Prng initialized").gen_range(0.. self.sum_possible_reaction_rates());
+        let max_index = self.sum_possible_reaction_rates();
+        let mut index = self.prng.gen_range(0..max_index);
         let mut next_reaction: Result<Reaction, String> = Result::Err("failed to find next reaction".to_string());
 
         // iterate through all possible valid reactions and pick one based on its probability 
@@ -146,7 +147,8 @@ impl ReactionNetwork {
 
     /// Selects a reaction to happen next, applies it to the solution, and re-generates the set of possible reactions so it remains up to date. 
     pub fn react(&mut self) {
-        self.solution.apply(self.get_next_reaction().unwrap());
+        let next_reaction = self.get_next_reaction().unwrap();
+        self.solution.apply(next_reaction);
         self.find_possible_reactions();// update list of possible reactions after solution has changed
     }
 

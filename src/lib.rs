@@ -16,23 +16,26 @@
 
 pub mod trial;
 
-use std::collections::{HashMap};
-
-use std::sync::mpsc::{
-    sync_channel,
-    SyncSender, Receiver, Sender
+use std::{
+    collections::{HashMap, HashSet},
+    sync::mpsc::{
+        sync_channel,
+        SyncSender,
+        Receiver
+    },
+    usize
 };
-
-use std::usize;
 use rayon::iter::{ParallelIterator, IntoParallelRefMutIterator};
-use rayon::result;
-use trial::Trial;
-use trial::reaction_network::solution::{Name, Count, self};
 use trial::{
+    Trial,
     TrialState,
     reaction_network::{
         ReactionNetwork, 
-        solution::Solution
+        solution::{ 
+            Solution,
+            Name,
+            Count
+        }
     }
 };
 
@@ -40,11 +43,11 @@ use trial::{
 #[derive(Debug)]
 pub enum MarleaError {
     Unknown(String),
-    Exceeded_runtime(&'static str)
+    ExceededRuntime(&'static str)
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct  Avg(f64);
+pub struct  Avg(pub f64);
 
 /// The final average returned by a Marlea simulation
 #[derive(Debug, Clone)]
@@ -53,9 +56,12 @@ pub enum MarleaResult {
     Final(Vec<(Name, Avg)>),// indicates that no more data will be sent
 }
 
+/// a simple struct providing a representation of a graphable datapoint
+pub struct Point(pub Name, pub crate::trial::Step, pub Count);
+
 /// The various behaviors marlea may use to return data as well any aditional data or objects they may need
 #[derive(Clone)]
-pub enum MarleaReturn {
+enum MarleaReturn {
     Full(SyncSender<MarleaResult>),
     Minimal(SyncSender<MarleaResult>),
     None()
@@ -175,10 +181,28 @@ impl Builder {
     /// Consumes builder object and outputs a Marlea engine object 
     pub fn build(self) -> (MarleaEngine, Receiver<MarleaResult>) {
 
+        // setup trials object
+        let mut processing_trials: HashMap<trial::ID, Trial> = HashMap::new();
+        processing_trials.reserve(self.num_trials);
+        let mut completed_trials: HashMap<trial::ID, Trial> = HashMap::new();
+        completed_trials.reserve(self.num_trials);
+        for index in 0..self.num_trials{
+            processing_trials.insert(
+                trial::ID(index),
+                Trial::from(
+                    self.prime_network.clone().with_seed(rand::random()), 
+                    self.max_semi_stable_steps,
+                    index
+                )
+            );
+        }
+
         let runtime = MarleaEngine {
             num_trials: self.num_trials,
             max_runtime:self.max_runtime,
             max_semi_stable_steps: self.max_semi_stable_steps,
+            processing_trials:processing_trials,
+            completed_trials:completed_trials,
             prime_network: self.prime_network,
             runtime_return: self.runtime_return,
             step_counter: 0,
@@ -196,6 +220,8 @@ pub struct MarleaEngine {
     max_semi_stable_steps: usize,
 
     // constructed internally
+    processing_trials: HashMap<trial::ID, Trial>,
+    completed_trials: HashMap<trial::ID, Trial>,
     prime_network: ReactionNetwork,
     runtime_return: MarleaReturn,
     step_counter: u64
@@ -204,7 +230,6 @@ pub struct MarleaEngine {
 impl MarleaEngine {
     /// Simulates the CRN and returns a sorted list of the average count of each species when a stable state is reached.  
     pub fn run(mut self) -> Result<MarleaResult, MarleaError>{
-        let result = Result::Err(MarleaError::Unknown("err\n\n huh?".to_string()));
 
         // create an instant in the future when which we should close the program 
         let timer = match self.max_runtime {
@@ -212,34 +237,18 @@ impl MarleaEngine {
             None => None
         };
 
-        // setup trials object
-        let mut processing_trials: HashMap<trial::ID, Trial> = HashMap::new();
-        processing_trials.reserve(self.num_trials);
-        let mut completed_trials: HashMap<trial::ID, Trial> = HashMap::new();
-        completed_trials.reserve(self.num_trials);
-        for index in 0..self.num_trials{
-            processing_trials.insert(
-                trial::ID(index),
-                Trial::from(
-                    self.prime_network.clone().with_seed(rand::random()), 
-                    self.max_semi_stable_steps,
-                    index
-                )
-            );
-        }
-
         // step trials to completion with paralelliterator and monitor communication from frontend
-        use rayon::iter::IntoParallelIterator;
-        while completed_trials.len() < self.num_trials {
+        while self.completed_trials.len() < self.num_trials {
             // step simulation forward in paralell
-            let step_results: Vec<TrialState> = processing_trials
+            let step_results: Vec<TrialState> = self.processing_trials
             .par_iter_mut()
             .map(
                 |trial|
                 trial.1.step()
             ).collect();
+            print!("finished step {}\n", self.step_counter);
             self.step_counter += 1;
-            
+                        
 
             // check return behavior 
             match self.runtime_return {
@@ -251,11 +260,11 @@ impl MarleaEngine {
                     for state in step_results {
                         sln_iter.push(
                             match state {
-                                TrialState::Processing(id, sln) => sln,
+                                TrialState::Processing(_, sln) => sln,
                                 TrialState::Complete(id, sln) => {
-                                    let trial = processing_trials.get(&id).unwrap();
-                                    completed_trials.insert(id, trial.clone());
-                                    processing_trials.remove(&id);
+                                    let trial = self.processing_trials.get(&id).unwrap();
+                                    self.completed_trials.insert(id, trial.clone());
+                                    self.processing_trials.remove(&id);
                                     sln
                                 }
                             }
@@ -272,9 +281,9 @@ impl MarleaEngine {
                         match state {
                             TrialState::Processing(_, _) => (),
                             TrialState::Complete(id, _) => {
-                                let trial = processing_trials.get(&id).unwrap();
-                                completed_trials.insert(id, trial.clone());
-                                processing_trials.remove(&id);
+                                let trial = self.processing_trials.get(&id).unwrap();
+                                self.completed_trials.insert(id, trial.clone());
+                                self.processing_trials.remove(&id);
                             }
                         }
                     }
@@ -285,9 +294,9 @@ impl MarleaEngine {
                         match state {
                             TrialState::Processing(_, _) => (),
                             TrialState::Complete(id, _) => {
-                                let trial = processing_trials.get(&id).unwrap();
-                                completed_trials.insert(id, trial.clone());
-                                processing_trials.remove(&id);
+                                let trial = self.processing_trials.get(&id).unwrap();
+                                self.completed_trials.insert(id, trial.clone());
+                                self.processing_trials.remove(&id);
                             }
                         }
                     }
@@ -297,27 +306,64 @@ impl MarleaEngine {
             // force quit when max runtime exceeded
             if let Some(time) = timer {
                 if time > std::time::Instant::now() {
-                    return Result::Err(MarleaError::Exceeded_runtime(&"Max runtime reached Force quitting"));
+                    return Result::Err(MarleaError::ExceededRuntime(&"Max runtime reached Force quitting"));
                 }
             }
         }
 
-
-        todo!("AHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH")
-        for state in completed_trials.values() {
-            state.get_solution()
+        // build final iterator over solutions
+        let mut final_sln_iter = Vec::new();
+        for state in self.completed_trials.values() {
+            final_sln_iter.push(state.get_solution().clone());
         }
 
-        
-        match self.runtime_return {
+
+        let final_avg = Self::average_trials(final_sln_iter);
+
+        // check return behavior and send final Avg
+        return match self.runtime_return {
             // send final avg 
-            MarleaReturn::Full(ref tx) => ,
-            MarleaReturn::Minimal(ref tx) => ,
-            MarleaReturn::None() => ,
-            
+            MarleaReturn::Full(ref tx) => {
+                tx.send(MarleaResult::Final(final_avg.clone())).unwrap();
+                Result::Ok(MarleaResult::Final(final_avg))
+            },
+            MarleaReturn::Minimal(ref tx) => {
+                tx.send(MarleaResult::Final(final_avg.clone())).unwrap();
+                Result::Ok(MarleaResult::Final(final_avg))
+            },
+            MarleaReturn::None() => Result::Ok(MarleaResult::Final(final_avg)),
         }
     }
+
+    pub fn get_completed_trials(&self) -> &HashMap<trial::ID, Trial> {
+        &self.completed_trials
+    }
     
+    /// Re-simulates a single solution providing back a sparse series of significant points which may be graphed
+    pub fn get_timeline (&self, id: &trial::ID) -> Vec<Point> {
+        let seed = self.completed_trials
+            .get(id)
+            .unwrap()
+            .get_seed()
+            .clone();
+        let mut re_trial = Trial::from(
+            self.prime_network.clone().with_seed(seed), 
+            self.max_semi_stable_steps, 
+            id.0,
+        );
+
+        let mut timeline = Vec::new();
+        let mut constructing_points: Vec<(Point, Point)> = Vec::new();
+        while let TrialState::Processing(_,sln) = re_trial.step() {
+            for (name, count) in sln {
+                todo!("check if slope of start -> new entry is equivalent to slope of start -> old entry and replace old with new if true
+                else push old entry point to timeline, replace start value with old entry, and replace old entry value with new entry")
+            }
+        }
+
+        return timeline;
+    }
+
     /// Averages the counts from a collection of solutions and returns them as a sorted list of name average value pairs
     fn average_trials(sim_states: Vec<Solution>) -> Vec<(Name, Avg)> {
         use rayon::{
@@ -856,7 +902,7 @@ mod tests {
         // manually described initial solution 
         let solution = Solution{species_counts: HashMap::from([
             (solution::Name("fibonacci.call".to_string()), Count(1)),
-            (solution::Name("index".to_string()), Count(10)),
+            (solution::Name("index".to_string()), Count(30)),
             (solution::Name("setup.call".to_string()), Count(0)),
             (solution::Name("setup.done".to_string()), Count(0)),
             (solution::Name("calculate.call".to_string()), Count(0)),
@@ -895,17 +941,23 @@ mod tests {
         ])};
         let (marlea, response_reciever) = Builder::new(ReactionNetwork::new(reactions, solution))
             .no_response()
-            .trials(1000)
+            .trials(10000)
             .build();
         
         drop(response_reciever);
         
-        let result = marlea.run().unwrap().0;
-        
-        for (name, count) in result {
-            if name == "return".to_string() {
-                assert!(count > 54.5&& count < 55.5);
+        let result = marlea.run().unwrap();
+
+        if let MarleaResult::Final(avg) = result {    
+            assert!(avg.len() > 0);
+            for (name, count) in avg {
+                print!("{} - {}\n", name.0, count.0);
+                if name.0 == "return".to_string() {
+                    assert!(count.0 > 54.5&& count.0 < 55.5);
+                }
             }
+        } else {
+            panic!("no final result?");
         }
     }
 }

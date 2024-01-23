@@ -108,8 +108,8 @@ impl <'trial_runtime> Trial {
         self.reaction_network.get_solution()
     }
 
-    pub fn get_seed(&self) -> [u8; 32] {
-        self.reaction_network.get_seed().unwrap()
+    pub fn get_seed(&self) -> &[u8; 32] {
+        self.reaction_network.get_seed()
     }
 }
 
