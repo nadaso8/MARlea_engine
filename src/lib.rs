@@ -57,6 +57,7 @@ pub enum MarleaResult {
 }
 
 /// a simple struct providing a representation of a graphable datapoint
+#[derive(Debug, Clone)]
 pub struct Point(pub Name, pub crate::trial::Step, pub Count);
 
 /// The various behaviors marlea may use to return data as well any aditional data or objects they may need
