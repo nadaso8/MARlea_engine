@@ -40,7 +40,7 @@ use trial::{
 };
 
 /// Marlea Error Types 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum MarleaEngineError {
     Unknown(String),
     ExceededRuntime(&'static str)
