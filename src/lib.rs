@@ -61,7 +61,7 @@ pub enum MarleaResult {
 pub struct Point(pub Name, pub crate::trial::Step, pub Count);
 
 /// The various behaviors marlea may use to return data as well any aditional data or objects they may need
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum MarleaReturn {
     Full(SyncSender<MarleaResult>),
     Minimal(SyncSender<MarleaResult>),
