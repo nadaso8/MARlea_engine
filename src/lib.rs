@@ -41,7 +41,7 @@ use trial::{
 
 /// Marlea Error Types 
 #[derive(Debug)]
-pub enum MarleaError {
+pub enum MarleaEngineError {
     Unknown(String),
     ExceededRuntime(&'static str)
 }
@@ -229,7 +229,7 @@ pub struct MarleaEngine {
 
 impl MarleaEngine {
     /// Simulates the CRN and returns a sorted list of the average count of each species when a stable state is reached.  
-    pub fn run(mut self) -> Result<MarleaResult, MarleaError>{
+    pub fn run(mut self) -> Result<MarleaResult, MarleaEngineError>{
 
         // create an instant in the future when which we should close the program 
         let timer = match self.max_runtime {
@@ -306,7 +306,7 @@ impl MarleaEngine {
             // force quit when max runtime exceeded
             if let Some(time) = timer {
                 if time > std::time::Instant::now() {
-                    return Result::Err(MarleaError::ExceededRuntime(&"Max runtime reached Force quitting"));
+                    return Result::Err(MarleaEngineError::ExceededRuntime(&"Max runtime reached Force quitting"));
                 }
             }
         }
